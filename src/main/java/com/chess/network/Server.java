@@ -1,0 +1,250 @@
+package com.chess.network;
+
+import com.chess.model.Piece;
+import com.chess.model.Position;
+import com.chess.engine.ChessEngine;
+import com.chess.model.Board;
+import com.chess.model.Move;
+import com.chess.utils.Logger;
+
+import java.io.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * Server for handling online chess games
+ */
+public class Server {
+    private static final Logger logger = Logger.getLogger(Server.class);
+    
+    private int port;
+    private ServerSocket serverSocket;
+    private boolean running;
+    private ExecutorService executorService;
+    private final List<ClientHandler> clients = new ArrayList<>();
+    private final Board gameBoard = new Board();
+    
+    public Server(int port) {
+        this.port = port;
+        this.executorService = Executors.newCachedThreadPool();
+    }
+    
+    public void start() throws IOException {
+        serverSocket = new ServerSocket(port);
+        running = true;
+        logger.info("Server started on port " + port + ". Waiting for players...");
+        
+        while (running && clients.size() < 2) {
+            try {
+                Socket clientSocket = serverSocket.accept();
+                logger.info("New client connecting: " + clientSocket.getInetAddress());
+                
+                synchronized (clients) {
+                    if (clients.size() < 2) {
+                        String color = (clients.isEmpty()) ? "White" : "Black";
+                        ClientHandler clientHandler = new ClientHandler(clientSocket, this, color);
+                        clients.add(clientHandler);
+                        executorService.execute(clientHandler);
+                        logger.info("Client connected as " + color + ". Total clients: " + clients.size());
+
+                        // If both players are now connected, start the game
+                        if (clients.size() == 2) {
+                            logger.info("Two players connected. Starting game.");
+                            broadcast("START");
+                            broadcast("BOARD:" + gameBoard.toFEN());
+                            broadcast("TURN:" + gameBoard.getCurrentTurn());
+                        }
+                    } else {
+                        // This case is for safety, though the outer loop condition should prevent it.
+                        rejectClient(clientSocket);
+                    }
+                }
+            } catch (IOException e) {
+                if (running) {
+                    logger.error("Error accepting client connection: " + e.getMessage());
+                }
+            }
+        }
+        
+        // If more than 2 people try to connect, reject them.
+        while(running) {
+            try {
+                rejectClient(serverSocket.accept());
+            } catch (IOException e) {
+                if (running) {
+                    logger.error("Error accepting client connection for rejection: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    private void rejectClient(Socket clientSocket) {
+        try {
+            PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
+            out.println("ERROR:Game is full.");
+            clientSocket.close();
+            logger.info("Rejected a client because the game is full.");
+        } catch (IOException e) {
+            logger.error("Error rejecting client: " + e.getMessage());
+        }
+    }
+    
+    public void stop() {
+        running = false;
+        if (serverSocket != null && !serverSocket.isClosed()) {
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                logger.error("Error closing server socket: " + e.getMessage());
+            }
+        }
+        executorService.shutdown();
+        logger.info("Server stopped");
+    }
+    
+    public synchronized void handleMove(ClientHandler client, Move move) {
+        // Validate that it's the correct player's turn
+        if (!gameBoard.getCurrentTurn().equals(client.getPlayerColor())) {
+            client.sendMessage("ERROR:Not your turn.");
+            return;
+        }
+        
+        // The move from the client might not have the correct piece instance from our board
+        Piece pieceOnBoard = gameBoard.getPiece(move.getFrom());
+        if (pieceOnBoard == null || !pieceOnBoard.getColor().equals(client.getPlayerColor())) {
+            client.sendMessage("ERROR:Invalid piece.");
+            return;
+        }
+
+        // Create a new move object with the server's piece instance
+        Move serverMove = new Move(move.getFrom(), move.getTo(), pieceOnBoard, gameBoard.getPiece(move.getTo()));
+
+        // Validate the move
+        if (gameBoard.makeMove(serverMove)) {
+            // Broadcast the move and new game state to all clients
+            broadcast("MOVE:" + serverMove.toSimpleString());
+            broadcast("BOARD:" + gameBoard.toFEN());
+
+            // Check for game end conditions
+            if (gameBoard.isCheckmate(gameBoard.getCurrentTurn())) {
+                String winner = gameBoard.getCurrentTurn().equals("White") ? "Black" : "White";
+                broadcast("GAMEOVER:Checkmate! " + winner + " wins!");
+            } else if (gameBoard.isStalemate(gameBoard.getCurrentTurn())) {
+                broadcast("GAMEOVER:Stalemate! It's a draw.");
+            } else {
+                 broadcast("TURN:" + gameBoard.getCurrentTurn());
+                 if(gameBoard.isInCheck(gameBoard.getCurrentTurn())) {
+                     broadcast("CHAT:Check!");
+                 }
+            }
+        } else {
+            client.sendMessage("ERROR:Invalid move.");
+        }
+    }
+    
+    public synchronized void handleChatMessage(ClientHandler client, String message) {
+        broadcast("CHAT:" + client.getPlayerColor() + ": " + message);
+    }
+    
+    public synchronized void removeClient(ClientHandler client) {
+        clients.remove(client);
+        logger.info("Client " + client.getPlayerColor() + " disconnected. Remaining clients: " + clients.size());
+        
+        if (running) {
+            broadcast("GAMEOVER:A player has disconnected. Game over.");
+            stop();
+        }
+    }
+    
+    public synchronized void broadcast(String message) {
+        logger.info("Broadcasting to " + clients.size() + " clients: " + message);
+        for (ClientHandler client : clients) {
+            client.sendMessage(message);
+        }
+    }
+    
+    /**
+     * Inner class to handle individual client connections
+     */
+    private static class ClientHandler implements Runnable {
+        private Socket socket;
+        private Server server;
+        private final String playerColor;
+        private BufferedReader reader;
+        private PrintWriter writer;
+        
+        public ClientHandler(Socket socket, Server server, String playerColor) throws IOException {
+            this.socket = socket;
+            this.server = server;
+            this.playerColor = playerColor;
+            this.reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            this.writer = new PrintWriter(socket.getOutputStream(), true);
+
+            // Send assigned color to the client
+            writer.println("COLOR:" + playerColor);
+        }
+        
+        @Override
+        public void run() {
+            try {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    logger.debug("Received from " + playerColor + ": " + line);
+                    handleMessage(line);
+                }
+            } catch (IOException e) {
+                if (server.running) {
+                    logger.error("Error reading from client " + playerColor + ": " + e.getMessage());
+                }
+            } finally {
+                server.removeClient(this);
+            }
+        }
+        
+        private void handleMessage(String message) {
+            if (message.startsWith("MOVE:")) {
+                // Handle move
+                String moveString = message.substring(5);
+                try {
+                    Move move = parseMove(moveString);
+                    server.handleMove(this, move);
+                } catch (Exception e) {
+                    sendMessage("ERROR: Invalid move format");
+                }
+            } else if (message.startsWith("CHAT:")) {
+                // Handle chat message
+                String chatMessage = message.substring(5);
+                server.handleChatMessage(this, chatMessage);
+            }
+        }
+        
+        private Move parseMove(String moveString) {
+            // This method now only parses the positions, the server validates the piece
+            if (moveString.length() != 4) {
+                throw new IllegalArgumentException("Invalid move format: " + moveString);
+            }
+            
+            Position from = new Position(moveString.substring(0, 2));
+            Position to = new Position(moveString.substring(2, 4));
+            
+            // The piece information will be filled in by the server based on its board state
+            return new Move(from, to, null, null);
+        }
+        
+        public void sendMessage(String message) {
+            writer.println(message);
+        }
+        
+        public String getPlayerColor() {
+            return playerColor;
+        }
+
+        private void cleanup() {
+            // This is now handled in the run() method's finally block
+        }
+    }
+} 

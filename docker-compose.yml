@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  chess-game:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    stdin_open: true
+    tty: true
+    command: ["/app/run.sh"]
+    
+  # Alternative headless server mode
+  chess-server:
+    build: .
+    ports:
+      - "8081:8080"
+    command: ["java", "-jar", "target/chess-game-1.0.0.jar", "server"]
+    profiles:
+      - server-only 
