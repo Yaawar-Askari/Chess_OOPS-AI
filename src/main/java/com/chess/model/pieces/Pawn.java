@@ -52,10 +52,9 @@ public class Pawn extends Piece {
     public int getValue() {
         return 100;
     }
-    
-    @Override
+      @Override
     public String getSymbol() {
-        return color.equals("White") ? "♙" : "♟";
+        return color.equals("White") ? "P" : "p";
     }
     
     @Override
@@ -106,6 +105,9 @@ public class Pawn extends Piece {
                 moves.add(rightDiagonal);
             }
         }
+        
+        // Add en passant moves
+        moves.addAll(getEnPassantMoves(board));
         
         return moves;
     }

@@ -29,10 +29,9 @@ public class Knight extends Piece {
     public int getValue() {
         return 320;
     }
-    
-    @Override
+      @Override
     public String getSymbol() {
-        return color.equals("White") ? "♘" : "♞";
+        return color.equals("White") ? "N" : "n";
     }
     
     @Override

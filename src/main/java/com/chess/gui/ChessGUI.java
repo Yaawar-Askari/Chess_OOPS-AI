@@ -41,6 +41,34 @@ public class ChessGUI extends JFrame {
         LOCAL, AI, HOST, CLIENT, MULTIPLAYER_HOST, MULTIPLAYER_CLIENT
     }
     
+    /**
+     * Safely updates board panel on EDT
+     */
+    private void safeUpdateBoardPanel() {
+        if (SwingUtilities.isEventDispatchThread()) {
+            if (boardPanel != null) {
+                boardPanel.repaint();
+            }
+        } else {
+            SwingUtilities.invokeLater(() -> {
+                if (boardPanel != null) {
+                    boardPanel.repaint();
+                }
+            });
+        }
+    }
+    
+    /**
+     * Safely updates status on EDT
+     */
+    private void safeUpdateStatus() {
+        if (SwingUtilities.isEventDispatchThread()) {
+            updateStatus();
+        } else {
+            SwingUtilities.invokeLater(this::updateStatus);
+        }
+    }
+    
     public ChessGUI() {
         System.out.println("Creating ChessGUI...");
         this.board = new Board();
@@ -263,15 +291,27 @@ public class ChessGUI extends JFrame {
             return; // Not your turn
         }
 
-        Move move = new Move(from, to, pieceToMove, board.getPiece(to));
-
-        // First, check if the move is valid. Only animate valid moves.
+        Move move = createMove(from, to, pieceToMove, board.getPiece(to));        // First, check if the move is valid. Only animate valid moves.
         if (board.isValidMove(move)) {
             this.pendingMove = move;
             boardPanel.animateMove(move);
         } else {
-            // If the move is invalid, just clear the selection.
-            clearSelection();
+            // If the move is invalid, provide visual feedback
+            logger.info("Invalid move attempted: " + move);
+            
+            // Flash the destination square red to indicate invalid move
+            boardPanel.highlightSquare(to, new Color(255, 0, 0, 180));
+            
+            // Play system beep for audio feedback
+            java.awt.Toolkit.getDefaultToolkit().beep();
+            
+            // Clear highlights after a short delay
+            Timer timer = new Timer(500, e -> {
+                boardPanel.clearHighlights();
+                clearSelection();
+            });
+            timer.setRepeats(false);
+            timer.start();
         }
     }
 
@@ -405,8 +445,7 @@ public class ChessGUI extends JFrame {
         logger.info("Black checkmate: " + board.isCheckmate("Black"));
         logger.info("White stalemate: " + board.isStalemate("White"));
         logger.info("Black stalemate: " + board.isStalemate("Black"));
-        
-        if (board.isCheckmate(board.getCurrentTurn())) {
+          if (board.isCheckmate(board.getCurrentTurn())) {
             String winner = board.getCurrentTurn().equals("White") ? "Black" : "White";
             logger.info("CHECKMATE DETECTED! Winner: " + winner);
             showEndGameScreen("Checkmate! " + winner + " wins.");
@@ -416,13 +455,18 @@ public class ChessGUI extends JFrame {
             showEndGameScreen("Stalemate! It's a draw.");
             return; // Stop further updates
         } else if (board.isInCheck(board.getCurrentTurn())) {
-            statusPanel.setStatus("Check! Turn: " + board.getCurrentTurn());
+            statusPanel.setStatus(board.getCurrentTurn() + " is in Check!");
         } else {
-            statusPanel.setStatus("Turn: " + board.getCurrentTurn());
+            statusPanel.setStatus(board.getCurrentTurn() + "'s turn");
         }
-        
-        statusPanel.setMoveCount(board.getMoveHistory().size());
+          statusPanel.setMoveCount(board.getMoveHistory().size());
         statusPanel.updateCapturedPieces(board.getWhiteCapturedPieces(), board.getBlackCapturedPieces());
+        
+        // Show last move if available
+        if (!board.getMoveHistory().isEmpty()) {
+            Move lastMove = board.getMoveHistory().get(board.getMoveHistory().size() - 1);
+            statusPanel.setLastMove(lastMove.getAlgebraicNotation());
+        }
         
         // Check for AI's turn, but don't re-trigger if it's already thinking
         if (gameMode == GameMode.AI && board.getCurrentTurn().equals("Black") && !isAITurn) {
@@ -582,8 +626,7 @@ public class ChessGUI extends JFrame {
 
             if (choice == JOptionPane.YES_OPTION) {
                 // Play Again - restart the same game mode
-                this.dispose();
-                switch (gameMode) {
+                this.dispose();                switch (gameMode) {
                     case LOCAL:
                         Main.startLocalGame();
                         break;
@@ -594,6 +637,12 @@ public class ChessGUI extends JFrame {
                         Main.startServer();
                         break;
                     case CLIENT:
+                        Main.startClient();
+                        break;
+                    case MULTIPLAYER_HOST:
+                        Main.startServer();
+                        break;
+                    case MULTIPLAYER_CLIENT:
                         Main.startClient();
                         break;
                 }
@@ -677,4 +726,40 @@ public class ChessGUI extends JFrame {
         // The message will be displayed when it's broadcast back from the server.
         // chatPanel.addMessage("You: " + message);
     }
-} 
+
+    /**
+     * Create a move with proper move type detection
+     */
+    private Move createMove(Position from, Position to, Piece piece, Piece capturedPiece) {
+        // Check if this is a castling move
+        if (piece.getType().equals("King")) {
+            int colDiff = to.getCol() - from.getCol();
+            if (Math.abs(colDiff) == 2) {
+                // This is a castling move
+                if (colDiff > 0) {
+                    return new Move(from, to, piece, capturedPiece, Move.MoveType.CASTLE_KINGSIDE, null, false, false);
+                } else {
+                    return new Move(from, to, piece, capturedPiece, Move.MoveType.CASTLE_QUEENSIDE, null, false, false);
+                }
+            }
+        }
+        
+        // Check if this is an en passant move
+        if (piece.getType().equals("Pawn") && board.getEnPassantTarget() != null && 
+            board.getEnPassantTarget().equals(to) && capturedPiece == null) {
+            return new Move(from, to, piece, capturedPiece, Move.MoveType.EN_PASSANT, null, false, false);
+        }
+        
+        // Check if this is a promotion move
+        if (piece.getType().equals("Pawn")) {
+            if ((piece.getColor().equals("White") && to.getRow() == 0) || 
+                (piece.getColor().equals("Black") && to.getRow() == 7)) {
+                // For now, default to Queen promotion - can be enhanced later
+                return new Move(from, to, piece, capturedPiece, Move.MoveType.PAWN_PROMOTION, "Queen", false, false);
+            }
+        }
+        
+        // Regular move
+        return new Move(from, to, piece, capturedPiece);
+    }
+}

@@ -29,10 +29,9 @@ public class Queen extends Piece {
     public int getValue() {
         return 900;
     }
-    
-    @Override
+      @Override
     public String getSymbol() {
-        return color.equals("White") ? "♕" : "♛";
+        return color.equals("White") ? "Q" : "q";
     }
     
     @Override

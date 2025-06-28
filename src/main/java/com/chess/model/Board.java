@@ -173,20 +173,169 @@ public class Board {
         
         return true;
     }
-    
-    /**
-     * Check if a move is valid
+      /**
+     * Check if a move is valid - centralized validation logic
      */
     public boolean isValidMove(Move move) {
         Piece piece = move.getPiece();
+        Position from = move.getFrom();
+        Position to = move.getTo();
+        
+        // Basic validation
+        if (piece == null || !from.isValid() || !to.isValid()) {
+            return false;
+        }
         
         // Check if it's the correct player's turn
         if (!piece.getColor().equals(currentTurn)) {
             return false;
         }
         
-        // Check if the move is valid for the piece
-        return piece.isValidMove(this, move.getTo());
+        // Check if destination is the same as source
+        if (from.equals(to)) {
+            return false;
+        }
+        
+        // Check if destination has friendly piece
+        Piece destinationPiece = getPiece(to);
+        if (destinationPiece != null && destinationPiece.getColor().equals(piece.getColor())) {
+            return false;
+        }
+        
+        // Check if the move is pseudo-legal for the piece type
+        if (!isPseudoLegalMove(piece, from, to)) {
+            return false;
+        }
+        
+        // Handle special move types
+        if (!isSpecialMoveValid(move)) {
+            return false;
+        }
+        
+        // Final check: ensure move doesn't leave own king in check
+        return !wouldLeaveKingInCheck(move);
+    }
+    
+    /**
+     * Check if a move is pseudo-legal (ignoring check considerations)
+     */
+    private boolean isPseudoLegalMove(Piece piece, Position from, Position to) {
+        // Special handling for castling moves
+        if (piece.getType().equals("King")) {
+            int colDiff = to.getCol() - from.getCol();
+            if (Math.abs(colDiff) == 2) {
+                // This is a castling move - check if castling is possible
+                if (colDiff > 0) {
+                    return canCastleKingside(piece.getColor());
+                } else {
+                    return canCastleQueenside(piece.getColor());
+                }
+            }
+        }
+        
+        List<Position> possibleMoves = piece.getPossibleMoves(this);
+        return possibleMoves.contains(to);
+    }
+    
+    /**
+     * Validate special move types (castling, en passant, promotion)
+     */
+    private boolean isSpecialMoveValid(Move move) {
+        switch (move.getType()) {
+            case CASTLE_KINGSIDE:
+                return canCastleKingside(move.getPiece().getColor());
+            case CASTLE_QUEENSIDE:
+                return canCastleQueenside(move.getPiece().getColor());
+            case EN_PASSANT:
+                return isEnPassantValid(move);
+            case PAWN_PROMOTION:
+                return isPawnPromotionValid(move);
+            default:
+                return true; // Normal moves
+        }
+    }
+    
+    /**
+     * Check if en passant move is valid
+     */
+    private boolean isEnPassantValid(Move move) {
+        if (enPassantTarget == null) {
+            return false;
+        }
+        
+        Position to = move.getTo();
+        Piece piece = move.getPiece();
+        
+        // Must be a pawn move to the en passant target square
+        return piece.getType().equals("Pawn") && to.equals(enPassantTarget);
+    }
+    
+    /**
+     * Check if pawn promotion is valid
+     */
+    private boolean isPawnPromotionValid(Move move) {
+        Piece piece = move.getPiece();
+        Position to = move.getTo();
+        
+        if (!piece.getType().equals("Pawn")) {
+            return false;
+        }
+        
+        // Check if pawn reaches promotion rank
+        if (piece.getColor().equals("White")) {
+            return to.getRow() == 0;
+        } else {
+            return to.getRow() == 7;
+        }
+    }
+      /**
+     * Check if making this move would leave own king in check
+     */
+    private boolean wouldLeaveKingInCheck(Move move) {
+        // Create a copy of the board and make the move
+        Board tempBoard = this.clone();
+        
+        // Create a new move with the cloned piece
+        Piece clonedPiece = tempBoard.getPiece(move.getFrom());
+        Move clonedMove = new Move(move.getFrom(), move.getTo(), clonedPiece, 
+                                   move.getCapturedPiece(), move.getType(), 
+                                   move.getPromotionPiece(), false, false);
+        
+        // Execute the move on the temporary board
+        tempBoard.executeMoveUnsafe(clonedMove);
+        
+        // Check if own king is in check
+        return tempBoard.isInCheck(move.getPiece().getColor());
+    }
+    
+    /**
+     * Execute a move without validation (for internal use)
+     */
+    private void executeMoveUnsafe(Move move) {
+        Position from = move.getFrom();
+        Position to = move.getTo();
+        Piece piece = move.getPiece();
+        
+        // Handle special moves
+        switch (move.getType()) {
+            case CASTLE_KINGSIDE:
+                executeKingsideCastle(piece.getColor());
+                break;
+            case CASTLE_QUEENSIDE:
+                executeQueensideCastle(piece.getColor());
+                break;
+            case EN_PASSANT:
+                executeEnPassant(move);
+                break;
+            case PAWN_PROMOTION:
+                executePawnPromotion(move);
+                break;
+            default:
+                // Regular move
+                setPiece(to, piece);
+                setPiece(from, null);
+                break;
+        }
     }
     
     /**
@@ -472,13 +621,15 @@ public class Board {
         
         return allMoves;
     }
-    
-    /**
+      /**
      * Create a deep copy of the board
      */
     @Override
     public Board clone() {
         Board clonedBoard = new Board();
+        
+        // Clear the default starting position
+        clonedBoard.clear();
         
         // Copy the grid
         for (int row = 0; row < 8; row++) {
@@ -617,13 +768,13 @@ public class Board {
         String currentPlayer = currentTurn;
         String opponent = currentPlayer.equals("White") ? "Black" : "White";
         
-        // Check for checkmate
-        if (isCheckmate(opponent)) {
-            return "CHECKMATE_" + currentPlayer.toUpperCase();
+        // Check for checkmate of the current player (the player whose turn it is)
+        if (isCheckmate(currentPlayer)) {
+            return "CHECKMATE_" + opponent.toUpperCase();
         }
         
-        // Check for stalemate
-        if (isStalemate(opponent)) {
+        // Check for stalemate of the current player
+        if (isStalemate(currentPlayer)) {
             return "STALEMATE";
         }
         

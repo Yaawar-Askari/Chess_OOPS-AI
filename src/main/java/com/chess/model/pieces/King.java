@@ -48,10 +48,9 @@ public class King extends Piece {
     public int getValue() {
         return 10000; // King has infinite value, but we use a high number
     }
-    
-    @Override
+      @Override
     public String getSymbol() {
-        return color.equals("White") ? "♔" : "♚";
+        return color.equals("White") ? "K" : "k";
     }
     
     @Override
@@ -136,4 +135,5 @@ public class King extends Piece {
         return !board.isInCheck(color) && !board.isSquareUnderAttack(square2, color) && 
                !board.isSquareUnderAttack(square3, color);
     }
-} 
+
+}

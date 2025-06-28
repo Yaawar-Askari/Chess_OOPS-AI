@@ -24,9 +24,10 @@ public class Rook extends Piece {
     public List<Position> getValidMoves(Board board) {
         return getPossibleMoves(board);
     }
-    
-    @Override
+      @Override
     public List<Position> getAttackMoves(Board board) {
+        // For attack purposes, rook controls all squares along its ranks and files
+        // This is different from possible moves as it includes squares beyond capturable pieces
         return getPossibleMoves(board);
     }
     
@@ -34,10 +35,9 @@ public class Rook extends Piece {
     public int getValue() {
         return 500;
     }
-    
-    @Override
+      @Override
     public String getSymbol() {
-        return color.equals("White") ? "♖" : "♜";
+        return color.equals("White") ? "R" : "r";
     }
     
     @Override
