@@ -5,12 +5,14 @@ com/chess/Main.class
 com/chess/network/Server.class
 com/chess/model/pieces/King.class
 com/chess/utils/FENUtils.class
+com/chess/model/Game$GameState.class
 com/chess/teacher/TeacherModule.class
 com/chess/model/Board$1.class
 com/chess/gui/ChessGUI$1.class
 com/chess/model/pieces/Rook.class
 com/chess/model/Position.class
 com/chess/model/pieces/Queen.class
+com/chess/model/Game$1.class
 com/chess/gui/ChatPanel$1.class
 com/chess/gui/ChessBoardPanel$1.class
 com/chess/gui/ChessBoardPanel$3.class
@@ -18,6 +20,7 @@ com/chess/utils/Logger.class
 com/chess/model/Board.class
 com/chess/model/Player.class
 com/chess/utils/FileHandler$GameData.class
+com/chess/model/Game.class
 com/chess/model/Move.class
 com/chess/utils/FileHandler.class
 com/chess/gui/ChessGUI$3.class
@@ -27,6 +30,7 @@ com/chess/model/AIPlayer.class
 com/chess/network/Client.class
 com/chess/teacher/TeacherModule$MoveAnalysis.class
 com/chess/gui/ChessGUI$GameMode.class
+com/chess/gui/GameSummaryDialog.class
 com/chess/gui/ChessBoardPanel$2.class
 com/chess/model/pieces/Knight.class
 com/chess/model/Piece.class
@@ -35,6 +39,7 @@ com/chess/model/pieces/Pawn.class
 com/chess/gui/ChatPanel$2.class
 com/chess/gui/ChessGUI$2.class
 com/chess/gui/ChatPanel.class
+com/chess/model/Game$GameMode.class
 com/chess/gui/ChessGUI.class
 com/chess/gui/GameStatusPanel.class
 com/chess/model/Move$MoveType.class

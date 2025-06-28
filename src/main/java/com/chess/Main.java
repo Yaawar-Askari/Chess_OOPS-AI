@@ -194,11 +194,13 @@ public class Main {
                 gui.setTitle("Chess Game - Waiting for Connection...");
                 System.out.println("Host GUI is visible.");
 
+                // Create the server first to get the actual port
+                Server server = new Server(NetworkUtils.PORT);
+                int actualPort = server.getPort();
+                
                 // Start the server in a background thread
                 new Thread(() -> {
                     try {
-                        Server server = new Server(8080);
-                        // This will now run in the background, accepting connections
                         server.start(); 
                     } catch (IOException e) {
                         logger.error("Failed to start server: " + e.getMessage());
@@ -207,15 +209,21 @@ public class Main {
                     }
                 }).start();
 
-                // Since the server is starting in the background, we can immediately show the join code
-                String joinCode = NetworkUtils.getLocalIpAddress();
+                // Show the join code with the actual port
+                String lanIp = NetworkUtils.getLocalIpAddress();
+                String joinMessage = "Share one of these Join Codes with your friend:\n\n" +
+                                     "For a friend on the same WiFi/LAN:\n" +
+                                     "  " + lanIp + ":" + actualPort + "\n\n" +
+                                     "If testing on the SAME computer:\n" +
+                                     "  " + "127.0.0.1:" + actualPort + "\n";
+
                 JOptionPane.showMessageDialog(gui,
-                    "Share this Join Code with your friend:\n\n" + joinCode,
+                    new JTextArea(joinMessage), // Use JTextArea for better formatting
                     "Game Hosted",
                     JOptionPane.INFORMATION_MESSAGE);
 
-                // Now, connect the host's client to their own server
-                gui.startHostGame("localhost", 8080);
+                // Now, connect the host's client to their own server using the actual port
+                gui.startGame(ChessGUI.GameMode.MULTIPLAYER_HOST, "127.0.0.1:" + actualPort);
                 gui.setTitle("Chess Game - Host");
                 System.out.println("Host game connected to server successfully.");
 
@@ -230,16 +238,36 @@ public class Main {
         System.out.println("Starting client...");
         String joinCode = JOptionPane.showInputDialog(
             null, 
-            "Enter Join Code (your friend's IP address):", 
+            "Enter Join Code (IP:PORT format, e.g., 192.168.1.100:9999):", 
             "Join Game",
             JOptionPane.QUESTION_MESSAGE
         );
         
         if (joinCode != null && !joinCode.trim().isEmpty()) {
+            // Parse the join code to extract IP and port
+            String[] parts = joinCode.trim().split(":");
+            if (parts.length != 2) {
+                JOptionPane.showMessageDialog(null, 
+                    "Invalid join code format. Please use IP:PORT format (e.g., 192.168.1.100:9999)", 
+                    "Invalid Format", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            String ipAddress = parts[0];
+            int port;
+            try {
+                port = Integer.parseInt(parts[1]);
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(null, 
+                    "Invalid port number. Please use a valid number.", 
+                    "Invalid Port", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
             SwingUtilities.invokeLater(() -> {
                 try {
                     ChessGUI gui = new ChessGUI();
-                    gui.startClientGame(joinCode.trim(), 8080);
+                    gui.startGame(ChessGUI.GameMode.MULTIPLAYER_CLIENT, ipAddress + ":" + port);
                     gui.setVisible(true);
                     System.out.println("Client game started successfully");
                 } catch (Exception e) {

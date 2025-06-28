@@ -17,6 +17,10 @@ public class GameStatusPanel extends JPanel {
     private JLabel hintLabel;
 
     public GameStatusPanel() {
+        this(null);
+    }
+    
+    public GameStatusPanel(String gameMode) {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
@@ -36,13 +40,15 @@ public class GameStatusPanel extends JPanel {
         add(whiteCapturedLabel);
         add(blackCapturedLabel);
 
-        add(Box.createVerticalStrut(20));
+        // Only show hint button for AI mode
+        if ("AI".equals(gameMode)) {
+            add(Box.createVerticalStrut(20));
+            hintButton = new JButton("Get Hint");
+            add(hintButton);
 
-        hintButton = new JButton("Get Hint");
-        add(hintButton);
-
-        hintLabel = new JLabel("Hints remaining: 3");
-        add(hintLabel);
+            hintLabel = new JLabel("Hints remaining: 3");
+            add(hintLabel);
+        }
     }
     
     public void setStatus(String status) {
@@ -78,6 +84,8 @@ public class GameStatusPanel extends JPanel {
     }
 
     public void setHintsRemaining(int count) {
-        hintLabel.setText("Hints remaining: " + count);
+        if (hintLabel != null) {
+            hintLabel.setText("Hints remaining: " + count);
+        }
     }
 } 

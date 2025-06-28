@@ -69,26 +69,20 @@ public class Client {
     
     private void handleServerMessage(String message) {
         if (message.startsWith("MOVE:")) {
-            // Handle incoming move
-            String moveString = message.substring(5);
-            try {
-                Move move = parseMove(moveString);
-                board.makeMove(move); // Update local board
-                gui.receiveMoveFromNetwork(move);
-            } catch (Exception e) {
-                logger.error("Error parsing move: " + moveString, e);
-            }
+            // Ignore individual move messages - we'll rely on BOARD:FEN for synchronization
+            // This ensures both players always have identical board states
+            logger.debug("Ignoring MOVE message, relying on BOARD:FEN for synchronization");
         } else if (message.startsWith("CHAT:")) {
             // Handle chat message
             String chatMessage = message.substring(5);
             gui.receiveChatMessage(chatMessage);
         } else if (message.startsWith("BOARD:")) {
-            // Handle board state update
+            // Handle board state update - this is our primary synchronization method
             String fen = message.substring(6);
             try {
                 this.board = Board.fromFEN(fen);
                 gui.updateBoard(this.board);
-                logger.info("Board state updated from FEN.");
+                logger.info("Board state updated from FEN: " + fen);
             } catch (Exception e) {
                 logger.error("Error parsing board state: " + fen, e);
             }
@@ -145,6 +139,7 @@ public class Client {
         }
         
         String moveString = "MOVE:" + move.toSimpleString();
+        logger.info("Sending move to server: " + moveString + " (from: " + move.getFrom() + ", to: " + move.getTo() + ")");
         writer.println(moveString);
         logger.debug("Sent move: " + moveString);
     }

@@ -28,13 +28,35 @@ public class Server {
     private final List<ClientHandler> clients = new ArrayList<>();
     private final Board gameBoard = new Board();
     
-    public Server(int port) {
-        this.port = port;
+    public Server(int preferredPort) {
+        this.port = findAvailablePort(preferredPort);
         this.executorService = Executors.newCachedThreadPool();
+    }
+    
+    /**
+     * Find an available port starting from the preferred port
+     */
+    private int findAvailablePort(int preferredPort) {
+        int port = preferredPort;
+        while (port < preferredPort + 100) { // Try up to 100 ports
+            try (ServerSocket testSocket = new ServerSocket(port)) {
+                logger.info("Found available port: " + port);
+                return port;
+            } catch (IOException e) {
+                port++;
+            }
+        }
+        // If no port found in range, use port 0 to let the system assign one
+        logger.warn("No available port found in range " + preferredPort + "-" + (preferredPort + 99) + ", using system-assigned port");
+        return 0;
     }
     
     public void start() throws IOException {
         serverSocket = new ServerSocket(port);
+        // If port was 0, get the actual assigned port
+        if (port == 0) {
+            port = serverSocket.getLocalPort();
+        }
         running = true;
         logger.info("Server started on port " + port + ". Waiting for players...");
         
@@ -107,8 +129,12 @@ public class Server {
     }
     
     public synchronized void handleMove(ClientHandler client, Move move) {
+        logger.info("Server handling move from " + client.getPlayerColor() + ": " + move.getFrom() + " to " + move.getTo());
+        logger.info("Current turn: " + gameBoard.getCurrentTurn());
+        
         // Validate that it's the correct player's turn
         if (!gameBoard.getCurrentTurn().equals(client.getPlayerColor())) {
+            logger.warn("Turn validation failed: " + client.getPlayerColor() + " tried to move on " + gameBoard.getCurrentTurn() + "'s turn");
             client.sendMessage("ERROR:Not your turn.");
             return;
         }
@@ -116,6 +142,7 @@ public class Server {
         // The move from the client might not have the correct piece instance from our board
         Piece pieceOnBoard = gameBoard.getPiece(move.getFrom());
         if (pieceOnBoard == null || !pieceOnBoard.getColor().equals(client.getPlayerColor())) {
+            logger.warn("Piece validation failed: piece at " + move.getFrom() + " is " + (pieceOnBoard == null ? "null" : pieceOnBoard.getColor()));
             client.sendMessage("ERROR:Invalid piece.");
             return;
         }
@@ -124,9 +151,11 @@ public class Server {
         Move serverMove = new Move(move.getFrom(), move.getTo(), pieceOnBoard, gameBoard.getPiece(move.getTo()));
 
         // Validate the move
+        logger.info("Attempting to make move on server board...");
         if (gameBoard.makeMove(serverMove)) {
-            // Broadcast the move and new game state to all clients
-            broadcast("MOVE:" + serverMove.toSimpleString());
+            logger.info("Move successful, broadcasting BOARD:FEN: " + gameBoard.toFEN());
+            // Broadcast the updated board state to all clients using FEN
+            // This ensures both players always have identical board states
             broadcast("BOARD:" + gameBoard.toFEN());
 
             // Check for game end conditions
@@ -142,6 +171,7 @@ public class Server {
                  }
             }
         } else {
+            logger.warn("Move validation failed: " + move.getFrom() + " to " + move.getTo() + " is not a valid move");
             client.sendMessage("ERROR:Invalid move.");
         }
     }
@@ -165,6 +195,10 @@ public class Server {
         for (ClientHandler client : clients) {
             client.sendMessage(message);
         }
+    }
+    
+    public int getPort() {
+        return port;
     }
     
     /**
@@ -209,10 +243,13 @@ public class Server {
             if (message.startsWith("MOVE:")) {
                 // Handle move
                 String moveString = message.substring(5);
+                logger.info("Server received move from " + playerColor + ": " + moveString);
                 try {
                     Move move = parseMove(moveString);
+                    logger.info("Server parsed move successfully: " + move.getFrom() + " to " + move.getTo());
                     server.handleMove(this, move);
                 } catch (Exception e) {
+                    logger.error("Server failed to parse move: " + moveString + " - " + e.getMessage());
                     sendMessage("ERROR: Invalid move format");
                 }
             } else if (message.startsWith("CHAT:")) {

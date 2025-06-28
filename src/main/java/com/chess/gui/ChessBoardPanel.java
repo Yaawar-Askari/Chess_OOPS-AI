@@ -4,6 +4,7 @@ import com.chess.model.Board;
 import com.chess.model.Move;
 import com.chess.model.Piece;
 import com.chess.model.Position;
+import com.chess.utils.Logger;
 
 import javax.swing.*;
 import java.awt.*;
@@ -40,6 +41,9 @@ public class ChessBoardPanel extends JPanel {
     private Point animationEndPos;
     private Point animationCurrentPos;
     private Timer animationTimer;
+    private String playerColor = "White"; // Default to "White"
+    
+    private static final Logger logger = Logger.getLogger(ChessBoardPanel.class);
     
     public ChessBoardPanel(Board board, ChessGUI parent) {
         this.board = board;
@@ -179,16 +183,22 @@ public class ChessBoardPanel extends JPanel {
         addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
-                int x = e.getX() / SQUARE_SIZE;
-                int y = e.getY() / SQUARE_SIZE;
+                int clickedCol = e.getX() / SQUARE_SIZE;
+                int clickedRow = e.getY() / SQUARE_SIZE;
                 
-                if (x >= 0 && x < 8 && y >= 0 && y < 8) {
-                    Position position = new Position(y, x);
+                if (clickedCol >= 0 && clickedCol < 8 && clickedRow >= 0 && clickedRow < 8) {
+                    int logicalRow = "White".equals(playerColor) ? clickedRow : 7 - clickedRow;
+                    int logicalCol = "White".equals(playerColor) ? clickedCol : 7 - clickedCol;
+
+                    Position position = new Position(logicalRow, logicalCol);
                     Piece piece = board.getPiece(position);
                     
                     if (piece != null && piece.getColor().equals(board.getCurrentTurn())) {
                         selectedPosition = position;
-                        dragOffset = new Point(e.getX() - (x * SQUARE_SIZE), e.getY() - (y * SQUARE_SIZE));
+                        // The drag offset needs to be calculated based on the potentially flipped view
+                        int displayX = clickedCol * SQUARE_SIZE;
+                        int displayY = clickedRow * SQUARE_SIZE;
+                        dragOffset = new Point(e.getX() - displayX, e.getY() - displayY);
                         isDragging = true;
                         setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                         
@@ -201,12 +211,13 @@ public class ChessBoardPanel extends JPanel {
             @Override
             public void mouseReleased(MouseEvent e) {
                 if (isDragging && selectedPosition != null) {
-                    int x = e.getX() / SQUARE_SIZE;
-                    int y = e.getY() / SQUARE_SIZE;
+                    int clickedCol = e.getX() / SQUARE_SIZE;
+                    int clickedRow = e.getY() / SQUARE_SIZE;
                     
-                    if (x >= 0 && x < 8 && y >= 0 && y < 8) {
-                        Position targetPosition = new Position(y, x);
-                        // Directly attempt the move instead of simulating clicks
+                    if (clickedCol >= 0 && clickedCol < 8 && clickedRow >= 0 && clickedRow < 8) {
+                        int logicalRow = "White".equals(playerColor) ? clickedRow : 7 - clickedRow;
+                        int logicalCol = "White".equals(playerColor) ? clickedCol : 7 - clickedCol;
+                        Position targetPosition = new Position(logicalRow, logicalCol);
                         parent.onMoveAttempted(selectedPosition, targetPosition);
                     }
                     
@@ -223,11 +234,13 @@ public class ChessBoardPanel extends JPanel {
             public void mouseClicked(MouseEvent e) {
                 // Only handle clicks if not dragging
                 if (!isDragging) {
-                    int x = e.getX() / SQUARE_SIZE;
-                    int y = e.getY() / SQUARE_SIZE;
+                    int clickedCol = e.getX() / SQUARE_SIZE;
+                    int clickedRow = e.getY() / SQUARE_SIZE;
                     
-                    if (x >= 0 && x < 8 && y >= 0 && y < 8) {
-                        Position position = new Position(y, x);
+                    if (clickedCol >= 0 && clickedCol < 8 && clickedRow >= 0 && clickedRow < 8) {
+                        int logicalRow = "White".equals(playerColor) ? clickedRow : 7 - clickedRow;
+                        int logicalCol = "White".equals(playerColor) ? clickedCol : 7 - clickedCol;
+                        Position position = new Position(logicalRow, logicalCol);
                         parent.onSquareClicked(position);
                     }
                 }
@@ -285,74 +298,86 @@ public class ChessBoardPanel extends JPanel {
     }
 
     public void animateMove(Move move) {
-        this.animatingPiece = move.getPiece();
-        Position from = move.getFrom();
-        Position to = move.getTo();
-        
-        this.animationStartPos = new Point(from.getCol() * SQUARE_SIZE, from.getRow() * SQUARE_SIZE);
-        this.animationEndPos = new Point(to.getCol() * SQUARE_SIZE, to.getRow() * SQUARE_SIZE);
-        this.animationCurrentPos = new Point(animationStartPos);
-        
+        this.animatingPiece = board.getPiece(move.getFrom());
+        if (this.animatingPiece == null) return;
+
+        int startRow = move.getFrom().getRow();
+        int startCol = move.getFrom().getCol();
+        int endRow = move.getTo().getRow();
+        int endCol = move.getTo().getCol();
+
+        int displayStartRow = "White".equals(playerColor) ? startRow : 7 - startRow;
+        int displayStartCol = "White".equals(playerColor) ? startCol : 7 - startCol;
+        int displayEndRow = "White".equals(playerColor) ? endRow : 7 - endRow;
+        int displayEndCol = "White".equals(playerColor) ? endCol : 7 - endCol;
+
+        animationStartPos = new Point(displayStartCol * SQUARE_SIZE, displayStartRow * SQUARE_SIZE);
+        animationEndPos = new Point(displayEndCol * SQUARE_SIZE, displayEndRow * SQUARE_SIZE);
+
+        animationCurrentPos = new Point(animationStartPos.x, animationStartPos.y);
         animationTimer.start();
     }
     
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        
-        // --- DEBUGGING ---
-        // This will tell us if the panel is being drawn and what its current size is.
-        System.out.println("DEBUG: ChessBoardPanel.paintComponent called. Size: " + getWidth() + "x" + getHeight());
-        // --- END DEBUGGING ---
-
         Graphics2D g2d = (Graphics2D) g;
-        
-        // Enable antialiasing
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        
-        // Draw board squares
+
+        // Draw squares and pieces
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
-                int x = col * SQUARE_SIZE;
-                int y = row * SQUARE_SIZE;
+                int displayRow = "White".equals(playerColor) ? row : 7 - row;
+                int displayCol = "White".equals(playerColor) ? col : 7 - col;
+
+                int x = displayCol * SQUARE_SIZE;
+                int y = displayRow * SQUARE_SIZE;
                 
                 // Determine square color
-                Color squareColor = ((row + col) % 2 == 0) ? 
-                    new Color(240, 217, 181) : new Color(181, 136, 99);
-                
+                Color squareColor = ((row + col) % 2 == 0) ? new Color(240, 217, 181) : new Color(181, 136, 99);
+
                 // Apply highlights
-                Position pos = new Position(row, col);
-                if (highlights.containsKey(pos)) {
-                    squareColor = highlights.get(pos);
+                Position currentPos = new Position(row, col);
+                if (highlights.containsKey(currentPos)) {
+                    g2d.setColor(highlights.get(currentPos));
+                } else {
+                    g2d.setColor(squareColor);
                 }
-                
-                g2d.setColor(squareColor);
                 g2d.fillRect(x, y, SQUARE_SIZE, SQUARE_SIZE);
-                
-                // Draw border
-                g2d.setColor(Color.BLACK);
-                g2d.drawRect(x, y, SQUARE_SIZE, SQUARE_SIZE);
-                
+
                 // Draw piece
-                Piece piece = board.getPiece(pos);
-                if (piece != null && !piece.equals(animatingPiece)) {
-                    drawPiece(g2d, piece, x, y);
+                Piece piece = board.getPiece(currentPos);
+                if (piece != null && !(isDragging && currentPos.equals(selectedPosition)) && piece != animatingPiece) {
+                     drawPiece(g2d, piece, x, y);
                 }
             }
         }
-        
+
         // Draw coordinates
         g2d.setColor(Color.BLACK);
         g2d.setFont(new Font("Arial", Font.BOLD, 12));
         for (int i = 0; i < 8; i++) {
             // File labels (a-h)
-            g2d.drawString(String.valueOf((char)('a' + i)), i * SQUARE_SIZE + 5, BOARD_SIZE - 5);
+            String file = String.valueOf((char)('a' + ("White".equals(playerColor) ? i : 7 - i)));
+            g2d.drawString(file, i * SQUARE_SIZE + SQUARE_SIZE / 2 - 4, getHeight() - 5);
+            
             // Rank labels (1-8)
-            g2d.drawString(String.valueOf(8 - i), 5, i * SQUARE_SIZE + 15);
+            String rank = String.valueOf("White".equals(playerColor) ? 8 - i : i + 1);
+            g2d.drawString(rank, 5, i * SQUARE_SIZE + SQUARE_SIZE / 2 + 4);
+        }
+        
+        // Draw dragged piece
+        if (isDragging && selectedPosition != null) {
+            Piece pieceToDrag = board.getPiece(selectedPosition);
+            Point mousePos = getMousePosition();
+            if (pieceToDrag != null && mousePos != null) {
+                int x = mousePos.x - dragOffset.x;
+                int y = mousePos.y - dragOffset.y;
+                drawPiece(g2d, pieceToDrag, x, y);
+            }
         }
 
-        // Draw the animating piece at its current position
-        if (animatingPiece != null && animationCurrentPos != null) {
+        // Draw animating piece
+        if (animationTimer.isRunning() && animatingPiece != null) {
             drawPiece(g2d, animatingPiece, animationCurrentPos.x, animationCurrentPos.y);
         }
     }
@@ -386,6 +411,7 @@ public class ChessBoardPanel extends JPanel {
     }
     
     public void setBoard(Board board) {
+        logger.info("ChessBoardPanel.setBoard called with board: " + board.toFEN());
         this.board = board;
         repaint();
     }
@@ -402,5 +428,10 @@ public class ChessBoardPanel extends JPanel {
     
     public Board getBoard() {
         return board;
+    }
+
+    public void setPlayerColor(String color) {
+        this.playerColor = color;
+        repaint(); // Repaint the board with the new orientation
     }
 } 

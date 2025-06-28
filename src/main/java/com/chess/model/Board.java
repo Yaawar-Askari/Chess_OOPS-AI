@@ -608,4 +608,81 @@ public class Board {
     public void setFullMoveNumber(int fullMoveNumber) {
         this.fullMoveNumber = fullMoveNumber;
     }
+
+    /**
+     * Check for game ending conditions after a move
+     * Returns: "CHECKMATE_WHITE", "CHECKMATE_BLACK", "STALEMATE", "DRAW", or null if game continues
+     */
+    public String checkGameEndingConditions() {
+        String currentPlayer = currentTurn;
+        String opponent = currentPlayer.equals("White") ? "Black" : "White";
+        
+        // Check for checkmate
+        if (isCheckmate(opponent)) {
+            return "CHECKMATE_" + currentPlayer.toUpperCase();
+        }
+        
+        // Check for stalemate
+        if (isStalemate(opponent)) {
+            return "STALEMATE";
+        }
+        
+        // Check for fifty-move rule
+        if (halfMoveClock >= 50) {
+            return "DRAW";
+        }
+        
+        // Check for insufficient material (simplified)
+        if (isInsufficientMaterial()) {
+            return "DRAW";
+        }
+        
+        return null; // Game continues
+    }
+    
+    /**
+     * Check if there's insufficient material for checkmate
+     */
+    private boolean isInsufficientMaterial() {
+        int whitePieces = 0;
+        int blackPieces = 0;
+        boolean hasWhitePawn = false;
+        boolean hasBlackPawn = false;
+        boolean hasWhiteRook = false;
+        boolean hasBlackRook = false;
+        boolean hasWhiteQueen = false;
+        boolean hasBlackQueen = false;
+        
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                Piece piece = getPiece(new Position(row, col));
+                if (piece != null) {
+                    if (piece.getColor().equals("White")) {
+                        whitePieces++;
+                        if (piece.getType().equals("Pawn")) hasWhitePawn = true;
+                        if (piece.getType().equals("Rook")) hasWhiteRook = true;
+                        if (piece.getType().equals("Queen")) hasWhiteQueen = true;
+                    } else {
+                        blackPieces++;
+                        if (piece.getType().equals("Pawn")) hasBlackPawn = true;
+                        if (piece.getType().equals("Rook")) hasBlackRook = true;
+                        if (piece.getType().equals("Queen")) hasBlackQueen = true;
+                    }
+                }
+            }
+        }
+        
+        // King vs King
+        if (whitePieces == 1 && blackPieces == 1) {
+            return true;
+        }
+        
+        // King and Bishop vs King or King and Knight vs King
+        if ((whitePieces == 2 && blackPieces == 1) || (whitePieces == 1 && blackPieces == 2)) {
+            return !hasWhitePawn && !hasBlackPawn && !hasWhiteRook && !hasBlackRook && 
+                   !hasWhiteQueen && !hasBlackQueen;
+        }
+        
+        return false;
+    }
 } 

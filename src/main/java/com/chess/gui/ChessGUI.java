@@ -68,11 +68,9 @@ public class ChessGUI extends JFrame {
         
         System.out.println("Creating status panel...");
         statusPanel = new GameStatusPanel();
-        add(statusPanel, BorderLayout.EAST);
+        add(statusPanel, BorderLayout.SOUTH);
         
-        System.out.println("Creating chat panel...");
-        chatPanel = new ChatPanel();
-        add(chatPanel, BorderLayout.SOUTH);
+        // Don't create chat panel by default - it will be created only for multiplayer modes
         
         // Initialize AI engine
         System.out.println("Initializing AI engine...");
@@ -102,14 +100,15 @@ public class ChessGUI extends JFrame {
         revalidate();
         repaint();
 
-        // Add listener for the hint button
-        statusPanel.getHintButton().addActionListener(e -> requestHint());
+        // Add listener for the hint button (only if it exists)
+        if (statusPanel.getHintButton() != null) {
+            statusPanel.getHintButton().addActionListener(e -> requestHint());
+        }
     }
     
     public void startLocalGame() {
         gameMode = GameMode.LOCAL;
         setTitle("Chess Game - Local (2 Players)");
-        chatPanel.setVisible(false);
         pack();
         setVisible(true);
     }
@@ -118,8 +117,9 @@ public class ChessGUI extends JFrame {
         gameMode = GameMode.AI;
         board = new Board();
         boardPanel = new ChessBoardPanel(board, this);
-        statusPanel = new GameStatusPanel();
-        chatPanel = new ChatPanel(this::sendChatMessage);
+        statusPanel = new GameStatusPanel("AI");
+        
+        // Don't create chat panel for AI mode
         
         aiEngine = new ChessEngine();
         
@@ -158,6 +158,91 @@ public class ChessGUI extends JFrame {
         }).start();
     }
     
+    public void startGame(GameMode mode, String ipAddress) {
+        this.gameMode = mode;
+        getContentPane().removeAll();
+
+        Board board = new Board();
+        boardPanel = new ChessBoardPanel(board, this);
+        statusPanel = new GameStatusPanel(mode.name());
+        
+        // Only create chat panel for multiplayer modes
+        if (mode == GameMode.MULTIPLAYER_HOST || mode == GameMode.MULTIPLAYER_CLIENT) {
+            chatPanel = new ChatPanel(this::onChatMessageSent);
+        }
+
+        statusPanel.updateStatus(board.getCurrentTurn() + "'s turn");
+
+        getContentPane().add(boardPanel, BorderLayout.CENTER);
+        getContentPane().add(statusPanel, BorderLayout.SOUTH);
+        
+        // Only add chat panel for multiplayer modes
+        if (mode == GameMode.MULTIPLAYER_HOST || mode == GameMode.MULTIPLAYER_CLIENT) {
+            getContentPane().add(chatPanel, BorderLayout.EAST);
+        }
+
+        if (gameMode == GameMode.MULTIPLAYER_HOST) {
+            // Server is already created in Main.startServer(), just connect to it
+            try {
+                joinServer(ipAddress);
+            } catch (IOException e) {
+                logger.error("Host failed to connect to own server", e);
+                JOptionPane.showMessageDialog(this, "Failed to start local server connection.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } else if (gameMode == GameMode.MULTIPLAYER_CLIENT) {
+            try {
+                joinServer(ipAddress);
+            } catch (IOException e) {
+                logger.error("Client failed to connect", e);
+                JOptionPane.showMessageDialog(this, "Failed to connect to server: " + e.getMessage(), "Connection Error", JOptionPane.ERROR_MESSAGE);
+                throw new RuntimeException(e);
+            }
+        }
+
+        pack();
+        setSize(1200, 800); // Set a fixed size
+        setLocationRelativeTo(null);
+        setVisible(true);
+        revalidate();
+        repaint();
+    }
+    
+    private void startServer() {
+        networkServer = new Server(NetworkUtils.PORT);
+        new Thread(() -> {
+            try {
+                networkServer.start();
+            } catch (IOException e) {
+                logger.error("Server failed to start", e);
+            }
+        }).start();
+        
+        // Get the actual port the server is using
+        int actualPort = networkServer.getPort();
+        JOptionPane.showMessageDialog(this, 
+            "Server started. Your join code is: " + NetworkUtils.getLocalIpAddress() + ":" + actualPort, 
+            "Server Info", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void joinServer(String ipAddress) throws IOException {
+        // Parse IP:PORT format
+        String[] parts = ipAddress.split(":");
+        if (parts.length != 2) {
+            throw new IOException("Invalid server address format. Expected IP:PORT");
+        }
+        
+        String serverIP = parts[0];
+        int serverPort;
+        try {
+            serverPort = Integer.parseInt(parts[1]);
+        } catch (NumberFormatException e) {
+            throw new IOException("Invalid port number: " + parts[1]);
+        }
+        
+        networkClient = new Client(serverIP, serverPort, this);
+        networkClient.connect();
+    }
+    
     /**
      * Handles a move attempt, either from a click or a drag-and-drop.
      */
@@ -168,6 +253,14 @@ public class ChessGUI extends JFrame {
         if (pieceToMove == null) {
             clearSelection();
             return; // No piece to move
+        }
+
+        // Check if the piece belongs to the current player's turn
+        logger.info("Move attempt - Piece color: " + pieceToMove.getColor() + ", Current turn: " + board.getCurrentTurn() + ", Player color: " + this.playerColor);
+        if (!pieceToMove.getColor().equals(board.getCurrentTurn())) {
+            logger.info("Attempted to move " + pieceToMove.getColor() + " piece on " + board.getCurrentTurn() + "'s turn");
+            clearSelection();
+            return; // Not your turn
         }
 
         Move move = new Move(from, to, pieceToMove, board.getPiece(to));
@@ -258,6 +351,16 @@ public class ChessGUI extends JFrame {
         SwingUtilities.invokeLater(() -> {
             logger.info("GUI received move from network: " + move);
             board.makeMove(move);
+            
+            // Check for game ending conditions after the move
+            String gameResult = board.checkGameEndingConditions();
+            if (gameResult != null) {
+                // Game is over, show summary dialog
+                String displayMessage = getGameEndDisplayMessage(gameResult);
+                GameSummaryDialog.showGameSummary(this, displayMessage);
+                return; // Don't continue with normal updates
+            }
+            
             boardPanel.repaint();
             updateStatus();
         });
@@ -265,7 +368,8 @@ public class ChessGUI extends JFrame {
     
     public void updateBoard(Board board) {
         SwingUtilities.invokeLater(() -> {
-            logger.info("GUI received full board update.");
+            logger.info("GUI received full board update. New FEN: " + board.toFEN());
+            logger.info("Old board FEN: " + this.board.toFEN());
             this.board = board;
             boardPanel.setBoard(board);
             boardPanel.repaint();
@@ -275,6 +379,10 @@ public class ChessGUI extends JFrame {
 
     public void updateTurn(String turn) {
         SwingUtilities.invokeLater(() -> {
+            logger.info("updateTurn called with turn: " + turn + ", playerColor: " + this.playerColor);
+            logger.info("Board current turn before update: " + board.getCurrentTurn());
+            board.setCurrentTurn(turn);
+            logger.info("Board current turn after update: " + board.getCurrentTurn());
             boolean isMyTurn = turn.equals(this.playerColor);
             statusPanel.updateStatus(isMyTurn ? "Your turn" : "Waiting for opponent's move...");
             boardPanel.setInteractionEnabled(isMyTurn);
@@ -282,15 +390,29 @@ public class ChessGUI extends JFrame {
     }
 
     public void receiveChatMessage(String message) {
-        SwingUtilities.invokeLater(() -> chatPanel.addMessage(message));
+        SwingUtilities.invokeLater(() -> {
+            if (chatPanel != null) {
+                chatPanel.addMessage(message);
+            }
+        });
     }
     
     private void updateStatus() {
+        logger.info("updateStatus called. Current turn: " + board.getCurrentTurn());
+        logger.info("White in check: " + board.isInCheck("White"));
+        logger.info("Black in check: " + board.isInCheck("Black"));
+        logger.info("White checkmate: " + board.isCheckmate("White"));
+        logger.info("Black checkmate: " + board.isCheckmate("Black"));
+        logger.info("White stalemate: " + board.isStalemate("White"));
+        logger.info("Black stalemate: " + board.isStalemate("Black"));
+        
         if (board.isCheckmate(board.getCurrentTurn())) {
             String winner = board.getCurrentTurn().equals("White") ? "Black" : "White";
+            logger.info("CHECKMATE DETECTED! Winner: " + winner);
             showEndGameScreen("Checkmate! " + winner + " wins.");
             return; // Stop further updates
         } else if (board.isStalemate(board.getCurrentTurn())) {
+            logger.info("STALEMATE DETECTED!");
             showEndGameScreen("Stalemate! It's a draw.");
             return; // Stop further updates
         } else if (board.isInCheck(board.getCurrentTurn())) {
@@ -312,7 +434,9 @@ public class ChessGUI extends JFrame {
         if (networkClient != null) {
             networkClient.sendChatMessage(message);
         }
-        chatPanel.addMessage("You: " + message);
+        if (chatPanel != null) {
+            chatPanel.addMessage("You: " + message);
+        }
     }
     
     private void handleAiMove() {
@@ -368,7 +492,28 @@ public class ChessGUI extends JFrame {
     
     public void onAnimationFinished() {
         if (pendingMove != null) {
-            board.makeMove(pendingMove);
+            // In multiplayer mode, don't update the board locally
+            // Wait for the server's BOARD:FEN response instead
+            if (gameMode != GameMode.MULTIPLAYER_HOST && gameMode != GameMode.MULTIPLAYER_CLIENT) {
+                board.makeMove(pendingMove);
+                
+                // Check for game ending conditions after the move
+                String gameResult = board.checkGameEndingConditions();
+                if (gameResult != null) {
+                    // Game is over, show summary dialog
+                    String displayMessage = getGameEndDisplayMessage(gameResult);
+                    SwingUtilities.invokeLater(() -> {
+                        GameSummaryDialog.showGameSummary(this, displayMessage);
+                    });
+                    return; // Don't continue with normal updates
+                }
+            }
+
+            // If in a multiplayer game, send the completed move to the network.
+            if (gameMode == GameMode.MULTIPLAYER_HOST || gameMode == GameMode.MULTIPLAYER_CLIENT) {
+                sendMoveToNetwork(pendingMove);
+            }
+
             pendingMove = null;
 
             // If an AI move was just made, unlock the board for the player
@@ -378,6 +523,24 @@ public class ChessGUI extends JFrame {
 
             boardPanel.repaint();
             updateStatus();
+        }
+    }
+    
+    /**
+     * Convert game result to display message
+     */
+    private String getGameEndDisplayMessage(String gameResult) {
+        switch (gameResult) {
+            case "CHECKMATE_WHITE":
+                return "Checkmate! White wins!";
+            case "CHECKMATE_BLACK":
+                return "Checkmate! Black wins!";
+            case "STALEMATE":
+                return "Stalemate! The game is a draw.";
+            case "DRAW":
+                return "Draw! The game is a draw.";
+            default:
+                return "Game Over";
         }
     }
     
@@ -483,6 +646,7 @@ public class ChessGUI extends JFrame {
             } catch (IOException e) {
                 logger.error("Error closing AI engine: " + e.getMessage());
             }
+
         }
         if (networkClient != null) {
             networkClient.disconnect();
@@ -495,12 +659,22 @@ public class ChessGUI extends JFrame {
 
     public void setPlayerColor(String color) {
         this.playerColor = color;
-        setTitle("Chess - " + color);
-        statusPanel.updateStatus("You are " + color + ". Waiting for opponent...");
+        logger.info("Player color set to: " + color);
+        if (boardPanel != null) {
+            boardPanel.setPlayerColor(color);
+        }
     }
     
     private void handleAITurn() {
         statusPanel.updateStatus("AI is thinking...");
         // Implementation of handleAITurn method
+    }
+
+    public void onChatMessageSent(String message) {
+        if (networkClient != null) {
+            networkClient.sendChatMessage(message);
+        }
+        // The message will be displayed when it's broadcast back from the server.
+        // chatPanel.addMessage("You: " + message);
     }
 } 

@@ -144,6 +144,13 @@ public class Move {
         return type == MoveType.PAWN_PROMOTION;
     }
     
+    /**
+     * Returns a simplified string representation of the move (e.g., "e2e4").
+     */
+    public String toSimpleString() {
+        return from.toAlgebraicNotation() + to.toAlgebraicNotation();
+    }
+    
     @Override
     public String toString() {
         return algebraicNotation;
@@ -161,9 +168,5 @@ public class Move {
     @Override
     public int hashCode() {
         return 31 * from.hashCode() + to.hashCode();
-    }
-
-    public String toSimpleString() {
-        return from.toAlgebraicNotation() + to.toAlgebraicNotation();
     }
 } 
