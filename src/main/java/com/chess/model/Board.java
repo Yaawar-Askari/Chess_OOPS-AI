@@ -117,6 +117,24 @@ public class Board {
         return new ArrayList<>(moveHistory);
     }
     
+    /**
+     * Get move history in algebraic notation
+     */
+    public List<String> getMoveHistoryInAlgebraicNotation() {
+        List<String> algebraicMoves = new ArrayList<>();
+        for (Move move : moveHistory) {
+            algebraicMoves.add(move.getAlgebraicNotation());
+        }
+        return algebraicMoves;
+    }
+    
+    /**
+     * Set the move history (used when loading games)
+     */
+    public void setMoveHistory(List<Move> moves) {
+        this.moveHistory = new ArrayList<>(moves);
+    }
+    
     public int getHalfMoveClock() {
         return halfMoveClock;
     }
@@ -836,4 +854,4 @@ public class Board {
         
         return false;
     }
-} 
+}

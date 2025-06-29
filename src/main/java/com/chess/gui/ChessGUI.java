@@ -6,13 +6,15 @@ import com.chess.network.Client;
 import com.chess.network.Server;
 import com.chess.utils.Logger;
 import com.chess.utils.NetworkUtils;
+import com.chess.utils.GameStateManager;
 import com.chess.Main;
 
 import javax.swing.*;
-import javax.swing.border.EmptyBorder;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.IOException;
+import java.io.File;
 import java.util.List;
 
 /**
@@ -85,6 +87,9 @@ public class ChessGUI extends JFrame {
         System.out.println("Initializing GUI components...");
         setTitle("Chess Game");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        
+        // Create menu bar
+        createMenuBar();
         
         // Create main layout
         setLayout(new BorderLayout());
@@ -797,6 +802,241 @@ public class ChessGUI extends JFrame {
         // If there's a pending move that was delayed due to drag, animate it now
         if (pendingMove != null && !boardPanel.isDragInProgress()) {
             boardPanel.animateMove(pendingMove);
+        }
+    }
+    
+    /**
+     * Creates the menu bar with File menu containing Save/Load options
+     */
+    private void createMenuBar() {
+        JMenuBar menuBar = new JMenuBar();
+        
+        // File menu
+        JMenu fileMenu = new JMenu("File");
+        
+        // Save Game item
+        JMenuItem saveGameItem = new JMenuItem("Save Game");
+        saveGameItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK));
+        saveGameItem.addActionListener(e -> saveGame());
+        fileMenu.add(saveGameItem);
+        
+        // Load Game item
+        JMenuItem loadGameItem = new JMenuItem("Load Game");
+        loadGameItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O, InputEvent.CTRL_DOWN_MASK));
+        loadGameItem.addActionListener(e -> loadGame());
+        fileMenu.add(loadGameItem);
+        
+        fileMenu.addSeparator();
+        
+        // New Game item
+        JMenuItem newGameItem = new JMenuItem("New Game");
+        newGameItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK));
+        newGameItem.addActionListener(e -> startNewGame());
+        fileMenu.add(newGameItem);
+        
+        menuBar.add(fileMenu);
+        setJMenuBar(menuBar);
+    }
+    
+    /**
+     * Saves the current game state to a file
+     */
+    private void saveGame() {
+        try {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("Save Chess Game");
+            fileChooser.setFileFilter(new FileNameExtensionFilter("Chess Game Files (*.json)", "json"));
+            fileChooser.setSelectedFile(new File("chess_game_" + System.currentTimeMillis() + ".json"));
+            
+            int userSelection = fileChooser.showSaveDialog(this);
+            if (userSelection == JFileChooser.APPROVE_OPTION) {
+                File fileToSave = fileChooser.getSelectedFile();
+                
+                // Ensure .json extension
+                if (!fileToSave.getName().toLowerCase().endsWith(".json")) {
+                    fileToSave = new File(fileToSave.getParentFile(), fileToSave.getName() + ".json");
+                }
+                
+                // Determine current game status
+                String gameStatus = "ongoing";
+                if (board.isCheckmate(board.getCurrentTurn())) {
+                    gameStatus = "checkmate";
+                } else if (board.isStalemate(board.getCurrentTurn())) {
+                    gameStatus = "stalemate";
+                } else if (board.isInCheck(board.getCurrentTurn())) {
+                    gameStatus = "check";
+                }
+                
+                // Get current player color
+                String currentPlayerColor = (playerColor != null) ? playerColor : "White";
+                
+                // Get current game mode
+                String currentGameMode = (gameMode != null) ? gameMode.toString() : "LOCAL";
+                
+                // Save the game
+                GameStateManager.GameState gameState = GameStateManager.createGameState(
+                    board,
+                    board.getMoveHistoryInAlgebraicNotation(),
+                    gameStatus,
+                    currentPlayerColor,
+                    currentGameMode
+                );
+                
+                try {
+                    GameStateManager.saveGameToFile(gameState, fileToSave);
+                    JOptionPane.showMessageDialog(this, 
+                        "Game saved successfully to:\n" + fileToSave.getAbsolutePath(), 
+                        "Game Saved", 
+                        JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception saveEx) {
+                    throw saveEx; // Re-throw to be caught by outer catch block
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error saving game: " + e.getMessage());
+            JOptionPane.showMessageDialog(this, 
+                "An error occurred while saving the game:\n" + e.getMessage(), 
+                "Save Error", 
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    /**
+     * Loads a game state from a file
+     */
+    private void loadGame() {
+        try {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("Load Chess Game");
+            fileChooser.setFileFilter(new FileNameExtensionFilter("Chess Game Files (*.json)", "json"));
+            
+            int userSelection = fileChooser.showOpenDialog(this);
+            if (userSelection == JFileChooser.APPROVE_OPTION) {
+                File fileToLoad = fileChooser.getSelectedFile();
+                
+                GameStateManager.GameState gameState = GameStateManager.loadGameFromFile(fileToLoad);
+                
+                if (gameState != null) {
+                    // Confirm with user before loading
+                    int confirm = JOptionPane.showConfirmDialog(this,
+                        "Loading this game will replace the current game.\nAre you sure you want to continue?",
+                        "Confirm Load",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.QUESTION_MESSAGE);
+                    
+                    if (confirm == JOptionPane.YES_OPTION) {
+                        // Apply the loaded game state
+                        applyGameState(gameState);
+                        
+                        JOptionPane.showMessageDialog(this, 
+                            "Game loaded successfully!\nSaved: " + gameState.getSavedAt(), 
+                            "Game Loaded", 
+                            JOptionPane.INFORMATION_MESSAGE);
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(this, 
+                        "Failed to load game. The file may be corrupted or invalid.", 
+                        "Load Error", 
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error loading game: " + e.getMessage());
+            JOptionPane.showMessageDialog(this, 
+                "An error occurred while loading the game:\n" + e.getMessage(), 
+                "Load Error", 
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    /**
+     * Applies a loaded game state to the current game
+     */
+    private void applyGameState(GameStateManager.GameState gameState) {
+        try {
+            // Create a new board from the FEN state
+            Board newBoard = Board.fromFEN(gameState.getBoardFEN());
+            if (newBoard != null) {
+                // Successfully loaded board state
+                this.board = newBoard;
+                
+                // Update the board panel with the new board
+                if (boardPanel != null) {
+                    boardPanel.setBoard(this.board);
+                }
+                
+                // Set the current turn
+                board.setCurrentTurn(gameState.getCurrentTurn());
+                
+                // Restore move history if available
+                if (gameState.getMoveHistory() != null && !gameState.getMoveHistory().isEmpty()) {
+                    // Note: The move history in algebraic notation is for display purposes
+                    // The actual board state is restored from FEN
+                    // We could parse and reconstruct Move objects if needed for full functionality
+                }
+                
+                // Update player color and game mode if available
+                if (gameState.getPlayerColor() != null) {
+                    this.playerColor = gameState.getPlayerColor();
+                }
+                
+                if (gameState.getGameMode() != null) {
+                    try {
+                        this.gameMode = GameMode.valueOf(gameState.getGameMode());
+                    } catch (IllegalArgumentException e) {
+                        // Default to LOCAL if invalid game mode
+                        this.gameMode = GameMode.LOCAL;
+                    }
+                }
+                
+                // Update the GUI
+                updateStatus();
+                if (boardPanel != null) {
+                    boardPanel.repaint();
+                }
+                
+                // Reset AI state if needed
+                if (gameMode == GameMode.AI) {
+                    isAITurn = "Black".equals(board.getCurrentTurn());
+                }
+                
+            } else {
+                throw new RuntimeException("Failed to load board state from FEN: " + gameState.getBoardFEN());
+            }
+        } catch (Exception e) {
+            logger.error("Error applying game state: " + e.getMessage());
+            throw new RuntimeException("Failed to apply loaded game state: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Starts a new game by resetting the board
+     */
+    private void startNewGame() {
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "Starting a new game will lose the current game.\nAre you sure you want to continue?",
+            "Confirm New Game",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.QUESTION_MESSAGE);
+        
+        if (confirm == JOptionPane.YES_OPTION) {
+            // Reset the board
+            this.board = new Board();
+            
+            // Update the board panel
+            if (boardPanel != null) {
+                boardPanel.setBoard(this.board);
+            }
+            
+            // Reset game state
+            selectedFrom = null;
+            isAITurn = false;
+            
+            // Update GUI
+            updateStatus();
+            if (boardPanel != null) {
+                boardPanel.repaint();
+            }
         }
     }
 }
