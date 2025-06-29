@@ -358,7 +358,17 @@ public class ChessGUI extends JFrame {
                 if (aiMove != null) {
                     SwingUtilities.invokeLater(() -> {
                         makeMove(aiMove);
-                        boardPanel.updateBoard();
+                        
+                        // Check if user is dragging before updating board
+                        if (boardPanel.isDragInProgress()) {
+                            // If user is dragging, just update the underlying board state
+                            // The visual update will happen when drag completes
+                            board = boardPanel.getBoard();
+                        } else {
+                            // Safe to update the board visually
+                            boardPanel.updateBoard();
+                        }
+                        
                         updateStatus();
                         isAITurn = false;
                     });
@@ -530,6 +540,15 @@ public class ChessGUI extends JFrame {
     private void makeMove(Move move) {
         if (move != null) {
             this.pendingMove = move;
+            
+            // If user is currently dragging, delay the animation until drag completes
+            // This prevents visual conflicts between drag and AI move animations
+            if (boardPanel.isDragInProgress()) {
+                // Store the pending move but don't animate yet
+                // The animation will be triggered when drag completes
+                return;
+            }
+            
             boardPanel.animateMove(move);
         }
     }
@@ -565,7 +584,15 @@ public class ChessGUI extends JFrame {
                 isAITurn = false;
             }
 
-            boardPanel.repaint();
+            // Only repaint if user is not currently dragging a piece
+            // This prevents the board from resetting during drag operations
+            if (!boardPanel.isDragInProgress()) {
+                boardPanel.repaint();
+            } else {
+                // Mark the board as needing update after drag completes
+                boardPanel.forceUpdateBoard();
+            }
+            
             updateStatus();
         }
     }
@@ -761,5 +788,15 @@ public class ChessGUI extends JFrame {
         
         // Regular move
         return new Move(from, to, piece, capturedPiece);
+    }
+
+    /**
+     * Called when a drag operation completes, triggers any pending AI animations
+     */
+    public void onDragCompleted() {
+        // If there's a pending move that was delayed due to drag, animate it now
+        if (pendingMove != null && !boardPanel.isDragInProgress()) {
+            boardPanel.animateMove(pendingMove);
+        }
     }
 }

@@ -55,6 +55,7 @@ public class ChessBoardPanel extends JPanel {
     private BufferedImage offscreenBuffer;
     private Graphics2D offscreenGraphics;
     private boolean bufferNeedsUpdate = true;
+    private boolean updatePendingAfterDrag = false; // Flag to track deferred updates
     
     // Visual enhancement variables
     private boolean showCoordinates = true;
@@ -498,6 +499,16 @@ public class ChessBoardPanel extends JPanel {
     }
 
     public void updateBoard() {
+        // If user is currently dragging, defer the update to avoid interrupting the drag
+        if (isDragging) {
+            // Mark that the board needs update and schedule it for after drag completion
+            bufferNeedsUpdate = true;
+            updatePendingAfterDrag = true; // Set flag to indicate update is pending
+            return;
+        }
+        
+        // Mark buffer for update and repaint
+        bufferNeedsUpdate = true;
         repaint();
     }
     
@@ -506,18 +517,25 @@ public class ChessBoardPanel extends JPanel {
             logger.info("ChessBoardPanel.setBoard called with board: " + board.toFEN());
             this.board = board;
             
-            // Clear any ongoing operations when board changes
-            clearDragState();
-            
-            // Stop any running animations to prevent conflicts
-            if (animationTimer != null && animationTimer.isRunning()) {
-                animationTimer.stop();
-                animatingPiece = null;
+            // Only clear drag state if not currently dragging
+            // This prevents interrupting user's drag operations
+            if (!isDragging) {
+                clearDragState();
+                
+                // Stop any running animations to prevent conflicts
+                if (animationTimer != null && animationTimer.isRunning()) {
+                    animationTimer.stop();
+                    animatingPiece = null;
+                }
             }
             
             // Mark buffer for update and repaint
             bufferNeedsUpdate = true;
-            repaint();
+            
+            // If dragging, defer the repaint to avoid visual disruption
+            if (!isDragging) {
+                repaint();
+            }
         }
     }
     
@@ -597,6 +615,8 @@ public class ChessBoardPanel extends JPanel {
      * Cleanly clears all drag-related state and triggers minimal repaint
      */
     private void clearDragState() {
+        boolean wasDragging = isDragging;
+        
         if (isDragging || currentDragPosition != null) {
             // Repaint the area where the dragged piece was
             if (currentDragPosition != null) {
@@ -612,6 +632,17 @@ public class ChessBoardPanel extends JPanel {
             lastDragPosition = null;
             setCursor(Cursor.getDefaultCursor());
             clearHighlights();
+        }
+        
+        // If we were dragging and there's a pending update, process it now
+        if (wasDragging && (bufferNeedsUpdate || updatePendingAfterDrag)) {
+            updatePendingAfterDrag = false;
+            repaint();
+            
+            // Notify parent that drag has completed so pending animations can be triggered
+            if (parent != null) {
+                parent.onDragCompleted();
+            }
         }
     }
     
@@ -701,5 +732,20 @@ public class ChessBoardPanel extends JPanel {
      */
     public void setSmoothAnimations(boolean smooth) {
         this.smoothAnimations = smooth;
+    }
+
+    /**
+     * Check if a drag operation is currently in progress
+     */
+    public boolean isDragInProgress() {
+        return isDragging;
+    }
+    
+    /**
+     * Force update the board even if dragging (use sparingly)
+     */
+    public void forceUpdateBoard() {
+        bufferNeedsUpdate = true;
+        repaint();
     }
 }
