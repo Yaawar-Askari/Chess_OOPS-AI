@@ -177,7 +177,20 @@ public class Server {
     }
     
     public synchronized void handleChatMessage(ClientHandler client, String message) {
-        broadcast("CHAT:" + client.getPlayerColor() + ": " + message);
+        logger.info("Chat message sent by " + client.getPlayerColor() + ": " + message);
+        
+        // Validate message (basic security check)
+        if (message == null || message.trim().isEmpty()) {
+            logger.warn("Empty chat message received from " + client.getPlayerColor());
+            return;
+        }
+        
+        // Limit message length to prevent spam
+        String sanitizedMessage = message.length() > 200 ? message.substring(0, 200) + "..." : message;
+        
+        String formattedMessage = "CHAT:" + client.getPlayerColor() + ": " + sanitizedMessage;
+        broadcast(formattedMessage);
+        logger.info("Chat message broadcast: " + formattedMessage);
     }
     
     public synchronized void removeClient(ClientHandler client) {

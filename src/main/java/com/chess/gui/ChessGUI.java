@@ -223,6 +223,10 @@ public class ChessGUI extends JFrame {
         // Only create chat panel for multiplayer modes
         if (mode == GameMode.MULTIPLAYER_HOST || mode == GameMode.MULTIPLAYER_CLIENT) {
             chatPanel = new ChatPanel(this::onChatMessageSent);
+            // Add welcome message
+            SwingUtilities.invokeLater(() -> {
+                chatPanel.addSystemMessage("Connecting to multiplayer game...");
+            });
         }
 
         statusPanel.updateStatus(board.getCurrentTurn() + "'s turn");
@@ -426,6 +430,10 @@ public class ChessGUI extends JFrame {
         SwingUtilities.invokeLater(() -> {
             if (chatPanel != null) {
                 chatPanel.addMessage(message);
+                logger.info("Chat message received and displayed: " + message);
+            } else {
+                // For non-multiplayer modes, log the message
+                logger.info("Chat message received (no chat panel): " + message);
             }
         });
     }
@@ -760,13 +768,51 @@ public class ChessGUI extends JFrame {
             boardPanel.setPlayerColor(color);
         }
     }
+    
+    /**
+     * Get the chat panel for connection status updates
+     */
+    public ChatPanel getChatPanel() {
+        return chatPanel;
+    }
 
     public void onChatMessageSent(String message) {
-        if (networkClient != null) {
-            networkClient.sendChatMessage(message);
+        logger.info("Chat message sent by user: " + message);
+        
+        if (networkClient != null && networkClient.isConnected()) {
+            // Send in background to avoid blocking UI
+            SwingWorker<Void, Void> sendWorker = new SwingWorker<Void, Void>() {
+                @Override
+                protected Void doInBackground() throws Exception {
+                    networkClient.sendChatMessage(message);
+                    return null;
+                }
+                
+                @Override
+                protected void done() {
+                    try {
+                        get(); // Check for exceptions
+                        logger.debug("Chat message sent successfully via network");
+                    } catch (Exception e) {
+                        logger.error("Failed to send chat message: " + e.getMessage());
+                        SwingUtilities.invokeLater(() -> {
+                            if (chatPanel != null) {
+                                chatPanel.addMessage("[X] Failed to send: " + e.getMessage());
+                                chatPanel.setConnectionActive(false);
+                            }
+                        });
+                    }
+                }
+            };
+            
+            sendWorker.execute();
+        } else {
+            logger.warn("Cannot send chat message - no network connection");
+            if (chatPanel != null) {
+                chatPanel.addMessage("[X] No network connection");
+                chatPanel.setConnectionActive(false);
+            }
         }
-        // The message will be displayed when it's broadcast back from the server.
-        // chatPanel.addMessage("You: " + message);
     }
 
     /**

@@ -8,6 +8,7 @@ import com.chess.model.Piece;
 import com.chess.engine.ChessEngine;
 import com.chess.utils.Logger;
 
+import javax.swing.SwingUtilities;
 import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -60,7 +61,13 @@ public class Client {
         } catch (IOException e) {
             if (connected) {
                 logger.error("Error reading from server: " + e.getMessage());
-                gui.receiveChatMessage("Connection lost to server");
+                gui.receiveChatMessage("[X] Connection lost to server");
+                // Notify GUI about connection loss
+                SwingUtilities.invokeLater(() -> {
+                    if (gui.getChatPanel() != null) {
+                        gui.getChatPanel().setConnectionActive(false);
+                    }
+                });
             }
         } finally {
             disconnect();
@@ -98,9 +105,16 @@ public class Client {
             gui.showEndGameScreen(reason);
             disconnect();
         } else if (message.equals("START")) {
-            gui.receiveChatMessage("Game is starting!");
+            gui.receiveChatMessage("[*] Game is starting! Good luck!");
+            // Enable chat functionality
+            SwingUtilities.invokeLater(() -> {
+                if (gui.getChatPanel() != null) {
+                    gui.getChatPanel().setConnectionActive(true);
+                    gui.getChatPanel().addSystemMessage("You are now connected and ready to chat!");
+                }
+            });
         } else if (message.equals("GAME_FULL")) {
-            gui.receiveChatMessage("Game is full. Cannot join.");
+            gui.receiveChatMessage("[!] Game is full. Cannot join.");
             disconnect();
         } else if (message.startsWith("ERROR:")) {
             String error = message.substring(6);
@@ -147,12 +161,23 @@ public class Client {
     public void sendChatMessage(String message) {
         if (!connected) {
             logger.warn("Cannot send chat message - not connected to server");
+            gui.receiveChatMessage("[X] Cannot send message: Not connected to server");
             return;
         }
         
-        String chatString = "CHAT:" + message;
-        writer.println(chatString);
-        logger.debug("Sent chat: " + chatString);
+        if (message == null || message.trim().isEmpty()) {
+            logger.warn("Attempted to send empty chat message");
+            return;
+        }
+        
+        try {
+            String chatString = "CHAT:" + message;
+            writer.println(chatString);
+            logger.info("Chat message sent to server: " + message);
+        } catch (Exception e) {
+            logger.error("Failed to send chat message: " + e.getMessage());
+            gui.receiveChatMessage("[X] Failed to send message: " + e.getMessage());
+        }
     }
     
     public void disconnect() {
