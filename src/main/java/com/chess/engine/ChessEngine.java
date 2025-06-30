@@ -7,7 +7,6 @@ import com.chess.utils.Logger;
 import com.chess.utils.FENUtils;
 
 import java.io.*;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Chess engine using Stockfish
@@ -58,16 +57,23 @@ public class ChessEngine {
         // Check common locations
         String[] paths = {
             "stockfish-windows-x86-64-avx2/stockfish/stockfish-windows-x86-64-avx2.exe",
+            "./stockfish-windows-x86-64-avx2/stockfish/stockfish-windows-x86-64-avx2.exe",
+            "stockfish/stockfish-windows-x86-64-avx2.exe",
+            "stockfish.exe",
             "stockfish",
-            "stockfish.exe"
+            "engines/stockfish.exe",
+            "engines/stockfish"
         };
         
         for (String path : paths) {
             File file = new File(path);
             if (file.exists() && file.canExecute()) {
+                logger.info("Found Stockfish executable at: " + path);
                 return path;
             }
         }
+        
+        logger.warn("Stockfish executable not found in common locations");
         return null;
     }
     
@@ -119,6 +125,36 @@ public class ChessEngine {
         }
     }
 
+    /**
+     * Check if Stockfish engine is available
+     */
+    public boolean isEngineAvailable() {
+        return stockfishProcess != null && stockfishProcess.isAlive();
+    }
+    
+    /**
+     * Simple fallback AI when Stockfish is not available
+     * Returns a random legal move
+     */
+    public Move getRandomMove(Board board) {
+        logger.info("Using fallback random AI");
+        
+        // Get all legal moves for the current player
+        java.util.List<Move> legalMoves = board.getAllValidMoves(board.getCurrentTurn());
+        
+        if (legalMoves.isEmpty()) {
+            logger.warn("No legal moves available for fallback AI");
+            return null;
+        }
+        
+        // Return a random legal move
+        java.util.Random random = new java.util.Random();
+        Move randomMove = legalMoves.get(random.nextInt(legalMoves.size()));
+        
+        logger.info("Fallback AI selected random move: " + randomMove.getAlgebraicNotation());
+        return randomMove;
+    }
+
     public void close() throws IOException {
         if (stockfishProcess != null && stockfishProcess.isAlive()) {
             writer.println("quit");
@@ -145,4 +181,4 @@ public class ChessEngine {
             logger.warn("No move found");
         }
     }
-} 
+}

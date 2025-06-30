@@ -113,16 +113,71 @@ public class ChessGUI extends JFrame {
     }
     
     public void startAIGame() {
+        // Let user choose their color
+        String[] options = {"Play as White", "Play as Black"};
+        int choice = JOptionPane.showOptionDialog(null,
+            "Choose your color:",
+            "AI Game Setup",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            options,
+            options[0]);
+        
+        if (choice == -1) {
+            // User cancelled, return to main menu
+            return;
+        }
+        
         gameMode = GameMode.AI;
+        playerColor = (choice == 0) ? "White" : "Black";
+        
+        // Reset the board for a new game
         board = new Board();
+        
+        // Initialize AI engine
+        try {
+            aiEngine = new ChessEngine();
+            logger.info("AI engine initialized for AI game mode");
+        } catch (Exception e) {
+            logger.error("Failed to initialize AI engine: " + e.getMessage());
+            JOptionPane.showMessageDialog(this, 
+                "Failed to initialize AI engine. Please check Stockfish installation.", 
+                "AI Engine Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        // Initialize GUI components
+        getContentPane().removeAll();
         boardPanel = new ChessBoardPanel(board, this);
         statusPanel = new GameStatusPanel("AI");
         
-        // Don't create chat panel for AI mode
+        setLayout(new BorderLayout());
+        add(boardPanel, BorderLayout.CENTER);
+        add(statusPanel, BorderLayout.SOUTH);
         
-        aiEngine = new ChessEngine();
+        setTitle("Chess Game - vs AI (You: " + playerColor + ")");
         
-        initializeGUI();
+        // Set board orientation based on player color
+        if (boardPanel != null) {
+            boardPanel.setPlayerColor(playerColor);
+        }
+        
+        updateStatus();
+        
+        // If player chose Black, AI (White) makes the first move
+        if (playerColor.equals("Black")) {
+            SwingUtilities.invokeLater(() -> {
+                handleAiMove();
+            });
+        }
+        
+        setExtendedState(JFrame.MAXIMIZED_BOTH);
+        setVisible(true);
+        revalidate();
+        repaint();
+        
+        logger.info("AI game started - Player: " + playerColor + ", AI: " + (playerColor.equals("White") ? "Black" : "White"));
     }
     
     public void startHostGame(String serverAddress, int port) {
@@ -229,7 +284,10 @@ public class ChessGUI extends JFrame {
      * Handles a move attempt, either from a click or a drag-and-drop.
      */
     public void onMoveAttempted(Position from, Position to) {
-        if (isAITurn) return; // Prevent moves during AI's turn
+        if (isAITurn) {
+            logger.info("Move attempt blocked - AI is thinking");
+            return; // Prevent moves during AI's turn
+        }
 
         Piece pieceToMove = board.getPiece(from);
         if (pieceToMove == null) {
@@ -243,6 +301,15 @@ public class ChessGUI extends JFrame {
             logger.info("Attempted to move " + pieceToMove.getColor() + " piece on " + board.getCurrentTurn() + "'s turn");
             clearSelection();
             return; // Not your turn
+        }
+        
+        // In AI mode, prevent player from moving AI's pieces
+        if (gameMode == GameMode.AI && this.playerColor != null) {
+            if (!pieceToMove.getColor().equals(this.playerColor)) {
+                logger.info("Attempted to move AI's piece (" + pieceToMove.getColor() + ") in AI mode");
+                clearSelection();
+                return;
+            }
         }
 
         Move move = createMove(from, to, pieceToMove, board.getPiece(to));        // First, check if the move is valid. Only animate valid moves.
@@ -273,7 +340,10 @@ public class ChessGUI extends JFrame {
      * Handles a user clicking on a square (for click-to-move).
      */
     public void onSquareClicked(Position position) {
-        if (isAITurn) return; // Prevent clicks during AI's turn
+        if (isAITurn) {
+            logger.info("Square click blocked - AI is thinking");
+            return; // Prevent clicks during AI's turn
+        }
 
         if (selectedFrom != null) {
             // A piece is already selected, try to move it to the new position
@@ -281,9 +351,20 @@ public class ChessGUI extends JFrame {
         } else if (board.getPiece(position) != null) {
             // No piece is selected, so select the one clicked (if it's the current player's)
             Piece clickedPiece = board.getPiece(position);
+            
+            // Check if it's the current player's turn and their piece
             if (clickedPiece.getColor().equals(board.getCurrentTurn())) {
+                // In AI mode, only allow selection of player's pieces
+                if (gameMode == GameMode.AI && this.playerColor != null) {
+                    if (!clickedPiece.getColor().equals(this.playerColor)) {
+                        logger.info("Attempted to select AI's piece in AI mode");
+                        return;
+                    }
+                }
+                
                 selectedFrom = position;
                 boardPanel.highlightValidMoves(clickedPiece);
+                logger.info("Selected piece: " + clickedPiece.getType() + " at " + position.toString());
             }
         }
     }
@@ -380,9 +461,12 @@ public class ChessGUI extends JFrame {
             statusPanel.setLastMove(lastMove.getAlgebraicNotation());
         }
         
-        // Check for AI's turn, but don't re-trigger if it's already thinking
-        if (gameMode == GameMode.AI && board.getCurrentTurn().equals("Black") && !isAITurn) {
-            handleAiMove();
+        // Check for AI's turn based on player color, but don't re-trigger if it's already thinking
+        if (gameMode == GameMode.AI && !isAITurn) {
+            String aiColor = playerColor.equals("White") ? "Black" : "White";
+            if (board.getCurrentTurn().equals(aiColor)) {
+                handleAiMove();
+            }
         }
     }
     
@@ -396,38 +480,55 @@ public class ChessGUI extends JFrame {
     }
     
     private void handleAiMove() {
+        if (isAITurn) {
+            // Prevent multiple AI move calculations
+            return;
+        }
+        
         isAITurn = true;
-        statusPanel.setStatus("AI is thinking...");
+        String aiColor = playerColor.equals("White") ? "Black" : "White";
+        statusPanel.setStatus("AI (" + aiColor + ") is thinking...");
+        logger.info("AI (" + aiColor + ") is calculating move...");
 
         aiMoveWorker = new SwingWorker<Move, Void>() {
             @Override
             protected Move doInBackground() throws Exception {
-                // Add a delay for a more natural feel
-                Thread.sleep(1000);
-                return aiEngine.getBestMove(board, 12);
+                // Add a small delay for a more natural feel
+                Thread.sleep(500);
+                
+                // Get best move from Stockfish with 2 second time limit
+                Move bestMove = aiEngine.getBestMove(board, 2000);
+                logger.info("Stockfish returned move: " + (bestMove != null ? bestMove.toString() : "null"));
+                return bestMove;
             }
 
             @Override
             protected void done() {
                 try {
                     Move bestMove = get();
-                    if (bestMove != null) {
+                    if (bestMove != null && board.isValidMove(bestMove)) {
+                        logger.info("AI (" + aiColor + ") played move: " + bestMove.getAlgebraicNotation());
                         makeMove(bestMove);
                     } else {
-                        // AI returned null, meaning no legal moves exist.
-                        // The game is over, so we determine if it's checkmate or stalemate.
+                        // AI returned null or invalid move, check game state
                         isAITurn = false;
-                        logger.warn("AI has no legal moves. Game is over.");
-                        if (board.isInCheck(board.getCurrentTurn())) {
-                            String winner = board.getCurrentTurn().equals("White") ? "Black" : "White";
+                        logger.warn("AI has no legal moves or returned invalid move. Checking game state...");
+                        
+                        if (board.isCheckmate(aiColor)) {
+                            String winner = aiColor.equals("White") ? "Black" : "White";
                             showEndGameScreen("Checkmate! " + winner + " wins.");
-                        } else {
+                        } else if (board.isStalemate(aiColor)) {
                             showEndGameScreen("Stalemate! It's a draw.");
+                        } else {
+                            // This shouldn't happen, but handle gracefully
+                            logger.error("AI returned no move but game is not over. This may be a bug.");
+                            statusPanel.setStatus("AI error. Game continues.");
                         }
                     }
                 } catch (java.util.concurrent.CancellationException e) {
                     logger.warn("AI move task was cancelled.");
                     isAITurn = false;
+                    statusPanel.setStatus("AI move cancelled.");
                 } catch (Exception e) {
                     logger.error("Error getting AI move: " + e.getMessage(), e);
                     // Reset AI turn on error
