@@ -8,7 +8,8 @@ import java.util.List;
 /**
  * Panel that displays game status information
  */
-public class GameStatusPanel extends JPanel {    private JLabel turnLabel;
+public class GameStatusPanel extends JPanel {
+    private JLabel turnLabel;
     private JLabel movesLabel;
     private JLabel lastMoveLabel;
     private JLabel whiteCapturedLabel;

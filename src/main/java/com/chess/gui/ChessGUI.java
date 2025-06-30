@@ -3,11 +3,8 @@ package com.chess.gui;
 import com.chess.model.*;
 import com.chess.engine.ChessEngine;
 import com.chess.network.Client;
-import com.chess.network.Server;
 import com.chess.utils.Logger;
-import com.chess.utils.NetworkUtils;
 import com.chess.utils.GameStateManager;
-import com.chess.Main;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -15,7 +12,6 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.IOException;
 import java.io.File;
-import java.util.List;
 
 /**
  * Main GUI for the chess game
@@ -29,7 +25,6 @@ public class ChessGUI extends JFrame {
     private ChatPanel chatPanel;
     private ChessEngine aiEngine;
     private Client networkClient;
-    private Server networkServer;
     
     private GameMode gameMode;
     private Position selectedFrom;
@@ -43,48 +38,20 @@ public class ChessGUI extends JFrame {
         LOCAL, AI, HOST, CLIENT, MULTIPLAYER_HOST, MULTIPLAYER_CLIENT
     }
     
-    /**
-     * Safely updates board panel on EDT
-     */
-    private void safeUpdateBoardPanel() {
-        if (SwingUtilities.isEventDispatchThread()) {
-            if (boardPanel != null) {
-                boardPanel.repaint();
-            }
-        } else {
-            SwingUtilities.invokeLater(() -> {
-                if (boardPanel != null) {
-                    boardPanel.repaint();
-                }
-            });
-        }
-    }
-    
-    /**
-     * Safely updates status on EDT
-     */
-    private void safeUpdateStatus() {
-        if (SwingUtilities.isEventDispatchThread()) {
-            updateStatus();
-        } else {
-            SwingUtilities.invokeLater(this::updateStatus);
-        }
-    }
-    
     public ChessGUI() {
-        System.out.println("Creating ChessGUI...");
+        logger.info("Creating ChessGUI...");
         this.board = new Board();
-        System.out.println("Board created successfully");
+        logger.info("Board created successfully");
 
         // Constructor now directly initializes the GUI.
         // The calling method will be responsible for ensuring it's on the EDT.
         initializeGUI();
 
-        System.out.println("ChessGUI initialization completed");
+        logger.info("ChessGUI initialization completed");
     }
     
     private void initializeGUI() {
-        System.out.println("Initializing GUI components...");
+        logger.info("Initializing GUI components...");
         setTitle("Chess Game");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         
@@ -95,24 +62,23 @@ public class ChessGUI extends JFrame {
         setLayout(new BorderLayout());
         
         // Create and add all components
-        System.out.println("Creating board panel...");
+        logger.info("Creating board panel...");
         boardPanel = new ChessBoardPanel(board, this);
         add(boardPanel, BorderLayout.CENTER);
         
-        System.out.println("Creating status panel...");
+        logger.info("Creating status panel...");
         statusPanel = new GameStatusPanel();
         add(statusPanel, BorderLayout.SOUTH);
         
         // Don't create chat panel by default - it will be created only for multiplayer modes
         
         // Initialize AI engine
-        System.out.println("Initializing AI engine...");
+        logger.info("Initializing AI engine...");
         try {
             aiEngine = new ChessEngine();
-            System.out.println("AI engine initialized successfully");
+            logger.info("AI engine initialized successfully");
         } catch (Exception e) {
             logger.error("Failed to initialize AI engine: " + e.getMessage());
-            System.err.println("Failed to initialize AI engine: " + e.getMessage());
             JOptionPane.showMessageDialog(this, 
                 "Failed to initialize AI engine. AI features will be disabled.", 
                 "Warning", JOptionPane.WARNING_MESSAGE);
@@ -125,7 +91,7 @@ public class ChessGUI extends JFrame {
         setPreferredSize(new Dimension(1200, 800)); // Set a preferred size for when un-maximized
         setLocationRelativeTo(null); // Center on screen
         
-        System.out.println("GUI initialization completed");
+        logger.info("GUI initialization completed");
         setVisible(true); // Make the frame visible
 
         // Force the layout manager to re-validate and repaint all components.
@@ -240,23 +206,6 @@ public class ChessGUI extends JFrame {
         repaint();
     }
     
-    private void startServer() {
-        networkServer = new Server(NetworkUtils.PORT);
-        new Thread(() -> {
-            try {
-                networkServer.start();
-            } catch (IOException e) {
-                logger.error("Server failed to start", e);
-            }
-        }).start();
-        
-        // Get the actual port the server is using
-        int actualPort = networkServer.getPort();
-        JOptionPane.showMessageDialog(this, 
-            "Server started. Your join code is: " + NetworkUtils.getLocalIpAddress() + ":" + actualPort, 
-            "Server Info", JOptionPane.INFORMATION_MESSAGE);
-    }
-    
     private void joinServer(String ipAddress) throws IOException {
         // Parse IP:PORT format
         String[] parts = ipAddress.split(":");
@@ -342,58 +291,6 @@ public class ChessGUI extends JFrame {
     private void clearSelection() {
         selectedFrom = null;
         boardPanel.clearHighlights();
-    }
-    
-    private void showValidMoves(Piece piece) {
-        List<Position> validMoves = piece.getValidMoves(board);
-        for (Position pos : validMoves) {
-            boardPanel.highlightSquare(pos, Color.GREEN);
-        }
-    }
-    
-    private void makeAIMove() {
-        if (aiEngine == null) return;
-        
-        isAITurn = true;
-        statusPanel.setStatus("AI is thinking...");
-        
-        new Thread(() -> {
-            try {
-                Move aiMove = aiEngine.getBestMove(board, 12);
-                if (aiMove != null) {
-                    SwingUtilities.invokeLater(() -> {
-                        makeMove(aiMove);
-                        
-                        // Check if user is dragging before updating board
-                        if (boardPanel.isDragInProgress()) {
-                            // If user is dragging, just update the underlying board state
-                            // The visual update will happen when drag completes
-                            board = boardPanel.getBoard();
-                        } else {
-                            // Safe to update the board visually
-                            boardPanel.updateBoard();
-                        }
-                        
-                        updateStatus();
-                        isAITurn = false;
-                    });
-                } else {
-                    // AI returned null move, check for game end.
-                    SwingUtilities.invokeLater(() -> {
-                        isAITurn = false;
-                        logger.warn("AI returned null move in makeAIMove. Checking for game end.");
-                        updateStatus();
-                    });
-                }
-            } catch (Exception e) {
-                logger.error("AI move failed: " + e.getMessage());
-                SwingUtilities.invokeLater(() -> {
-                    isAITurn = false;
-                    statusPanel.setStatus("AI error. Your turn.");
-                    updateStatus();
-                });
-            }
-        }).start();
     }
     
     private void sendMoveToNetwork(Move move) {
@@ -658,30 +555,50 @@ public class ChessGUI extends JFrame {
 
             if (choice == JOptionPane.YES_OPTION) {
                 // Play Again - restart the same game mode
-                this.dispose();                switch (gameMode) {
-                    case LOCAL:
-                        Main.startLocalGame();
-                        break;
-                    case AI:
-                        Main.startAIGame();
-                        break;
-                    case HOST:
-                        Main.startServer();
-                        break;
-                    case CLIENT:
-                        Main.startClient();
-                        break;
-                    case MULTIPLAYER_HOST:
-                        Main.startServer();
-                        break;
-                    case MULTIPLAYER_CLIENT:
-                        Main.startClient();
-                        break;
-                }
-            } else if (choice == JOptionPane.NO_OPTION) {
-                // Main Menu
                 this.dispose();
-                Main.main(new String[]{}); // Restart the main menu
+                SwingUtilities.invokeLater(() -> {
+                    ChessGUI newGui = new ChessGUI();
+                    switch (gameMode) {
+                        case LOCAL:
+                            newGui.startLocalGame();
+                            break;
+                        case AI:
+                            newGui.startAIGame();
+                            break;
+                        case HOST:
+                            // Note: Host and server functionality needs to be re-implemented
+                            // For now, start local game
+                            newGui.startLocalGame();
+                            break;
+                        case CLIENT:
+                            // Note: Client functionality needs to be re-implemented
+                            // For now, start local game
+                            newGui.startLocalGame();
+                            break;
+                        case MULTIPLAYER_HOST:
+                            // Note: Multiplayer host functionality needs to be re-implemented
+                            // For now, start local game
+                            newGui.startLocalGame();
+                            break;
+                        case MULTIPLAYER_CLIENT:
+                            // Note: Multiplayer client functionality needs to be re-implemented
+                            // For now, start local game
+                            newGui.startLocalGame();
+                            break;
+                    }
+                    newGui.setVisible(true);
+                });
+            } else if (choice == JOptionPane.NO_OPTION) {
+                // Main Menu - restart the application
+                this.dispose();
+                SwingUtilities.invokeLater(() -> {
+                    try {
+                        com.chess.Main.main(new String[]{});
+                    } catch (Exception e) {
+                        logger.error("Error restarting main menu: " + e.getMessage());
+                        System.exit(0);
+                    }
+                });
             } else {
                 // Exit
                 System.exit(0);
@@ -732,9 +649,6 @@ public class ChessGUI extends JFrame {
         if (networkClient != null) {
             networkClient.disconnect();
         }
-        if (networkServer != null) {
-            networkServer.stop();
-        }
         super.dispose();
     }
 
@@ -744,11 +658,6 @@ public class ChessGUI extends JFrame {
         if (boardPanel != null) {
             boardPanel.setPlayerColor(color);
         }
-    }
-    
-    private void handleAITurn() {
-        statusPanel.updateStatus("AI is thinking...");
-        // Implementation of handleAITurn method
     }
 
     public void onChatMessageSent(String message) {

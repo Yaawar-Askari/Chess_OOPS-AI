@@ -47,7 +47,6 @@ public class ChessBoardPanel extends JPanel {
     
     // Performance optimization variables
     private boolean interactionEnabled = true;
-    private Rectangle lastRepaintRegion;
     
     // Additional performance optimizations
     private volatile boolean isRepaintInProgress = false;

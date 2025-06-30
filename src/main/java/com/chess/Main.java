@@ -16,20 +16,19 @@ public class Main {
     private static final Logger logger = Logger.getLogger(Main.class);
     
     public static void main(String[] args) {
-        System.out.println("Chess Game starting...");
+        logger.info("Chess Game starting...");
         
         // Set system look and feel
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            System.out.println("Look and feel set successfully");
+            logger.info("Look and feel set successfully");
         } catch (Exception e) {
             logger.warn("Could not set system look and feel: " + e.getMessage());
-            System.out.println("Warning: Could not set look and feel: " + e.getMessage());
         }
         
         // Parse command line arguments
         if (args.length > 0) {
-            System.out.println("Starting with argument: " + args[0]);
+            logger.info("Starting with argument: " + args[0]);
             switch (args[0].toLowerCase()) {
                 case "server":
                     startServer();
@@ -48,13 +47,13 @@ public class Main {
                     break;
             }
         } else {
-            System.out.println("Starting main menu...");
+            logger.info("Starting main menu...");
             showMainMenu();
         }
     }
     
     private static void showMainMenu() {
-        System.out.println("Creating main menu...");
+        logger.info("Creating main menu...");
         SwingUtilities.invokeLater(() -> {
             try {
                 // Create the main frame
@@ -95,25 +94,25 @@ public class Main {
                 
                 // Add action listeners
                 localGameBtn.addActionListener(e -> {
-                    System.out.println("Local Game button clicked!");
+                    logger.info("Local Game button clicked");
                     frame.dispose();
                     startLocalGame();
                 });
                 
                 aiGameBtn.addActionListener(e -> {
-                    System.out.println("AI Game button clicked!");
+                    logger.info("AI Game button clicked");
                     frame.dispose();
                     startAIGame();
                 });
                 
                 hostGameBtn.addActionListener(e -> {
-                    System.out.println("Host Game button clicked!");
+                    logger.info("Host Game button clicked");
                     frame.dispose();
                     startServer();
                 });
                 
                 joinGameBtn.addActionListener(e -> {
-                    System.out.println("Join Game button clicked!");
+                    logger.info("Join Game button clicked");
                     frame.dispose();
                     startClient();
                 });
@@ -134,12 +133,12 @@ public class Main {
                 frame.setVisible(true);
                 frame.toFront();
                 
-                System.out.println("Main menu window is now visible with " + panel.getComponentCount() + " components");
+                logger.debug("Main menu window is now visible with " + panel.getComponentCount() + " components");
                 
                 // Print component info for debugging
                 for (int i = 0; i < panel.getComponentCount(); i++) {
                     Component comp = panel.getComponent(i);
-                    System.out.println("Component " + i + ": " + comp.getClass().getSimpleName() + 
+                    logger.debug("Component " + i + ": " + comp.getClass().getSimpleName() + 
                                      (comp instanceof JButton ? " - " + ((JButton)comp).getText() : ""));
                 }
                 
@@ -151,7 +150,7 @@ public class Main {
     }
     
     public static void startLocalGame() {
-        System.out.println("Starting local game...");
+        logger.info("Starting local game...");
         SwingUtilities.invokeLater(() -> {
             try {
                 ChessGUI gui = new ChessGUI();
@@ -159,16 +158,15 @@ public class Main {
                 gui.setVisible(true);
                 gui.toFront();
                 gui.requestFocus();
-                System.out.println("Local game started successfully");
+                logger.info("Local game started successfully");
             } catch (Exception e) {
-                System.err.println("Error starting local game: " + e.getMessage());
-                e.printStackTrace();
+                logger.error("Error starting local game: " + e.getMessage(), e);
             }
         });
     }
     
     public static void startAIGame() {
-        System.out.println("Starting AI game...");
+        logger.info("Starting AI game...");
         SwingUtilities.invokeLater(() -> {
             try {
                 ChessGUI gui = new ChessGUI();
@@ -176,23 +174,22 @@ public class Main {
                 gui.setVisible(true);
                 gui.toFront();
                 gui.requestFocus();
-                System.out.println("AI game started successfully");
+                logger.info("AI game started successfully");
             } catch (Exception e) {
-                System.err.println("Error starting AI game: " + e.getMessage());
-                e.printStackTrace();
+                logger.error("Error starting AI game: " + e.getMessage(), e);
             }
         });
     }
     
     public static void startServer() {
-        System.out.println("Starting server...");
+        logger.info("Starting server...");
         SwingUtilities.invokeLater(() -> {
             try {
                 // Create and display the GUI for the host immediately
                 ChessGUI gui = new ChessGUI();
                 gui.setVisible(true);
                 gui.setTitle("Chess Game - Waiting for Connection...");
-                System.out.println("Host GUI is visible.");
+                logger.info("Host GUI is visible");
 
                 // Create the server first to get the actual port
                 Server server = new Server(NetworkUtils.PORT);
@@ -225,17 +222,16 @@ public class Main {
                 // Now, connect the host's client to their own server using the actual port
                 gui.startGame(ChessGUI.GameMode.MULTIPLAYER_HOST, "127.0.0.1:" + actualPort);
                 gui.setTitle("Chess Game - Host");
-                System.out.println("Host game connected to server successfully.");
+                logger.info("Host game connected to server successfully");
 
             } catch (Exception e) {
-                logger.error("An unexpected error occurred during server setup: " + e.getMessage());
-                e.printStackTrace();
+                logger.error("An unexpected error occurred during server setup: " + e.getMessage(), e);
             }
         });
     }
     
     public static void startClient() {
-        System.out.println("Starting client...");
+        logger.info("Starting client...");
         String joinCode = JOptionPane.showInputDialog(
             null, 
             "Enter Join Code (IP:PORT format, e.g., 192.168.1.100:9999):", 
@@ -269,10 +265,9 @@ public class Main {
                     ChessGUI gui = new ChessGUI();
                     gui.startGame(ChessGUI.GameMode.MULTIPLAYER_CLIENT, ipAddress + ":" + port);
                     gui.setVisible(true);
-                    System.out.println("Client game started successfully");
+                    logger.info("Client game started successfully");
                 } catch (Exception e) {
-                    System.err.println("Error starting client game: " + e.getMessage());
-                    e.printStackTrace();
+                    logger.error("Error starting client game: " + e.getMessage(), e);
                     JOptionPane.showMessageDialog(null, 
                         "Could not connect to server: " + e.getMessage(), 
                         "Connection Error", JOptionPane.ERROR_MESSAGE);
@@ -282,7 +277,7 @@ public class Main {
     }
     
     private static void testGUI() {
-        System.out.println("Testing GUI components...");
+        logger.info("Testing GUI components...");
         SwingUtilities.invokeLater(() -> {
             JFrame testFrame = new JFrame("GUI Test");
             testFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -292,7 +287,7 @@ public class Main {
             JPanel panel = new JPanel();
             JButton testButton = new JButton("Test Button");
             testButton.addActionListener(e -> {
-                System.out.println("Test button clicked!");
+                logger.info("Test button clicked");
                 JOptionPane.showMessageDialog(testFrame, "GUI is working!");
             });
             
@@ -300,7 +295,7 @@ public class Main {
             testFrame.add(panel);
             testFrame.setVisible(true);
             
-            System.out.println("Test GUI window created");
+            logger.info("Test GUI window created");
         });
     }
 } 

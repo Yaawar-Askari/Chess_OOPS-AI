@@ -140,9 +140,9 @@ public class ChessEngine {
         
         Move bestMove = engine.getBestMove(board, 1000);
         if (bestMove != null) {
-            System.out.println("Best move: " + bestMove);
+            logger.info("Best move: " + bestMove);
         } else {
-            System.out.println("No move found");
+            logger.warn("No move found");
         }
     }
 } 
