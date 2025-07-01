@@ -746,14 +746,41 @@ public class ChessGUI extends JFrame {
     }
     
     private void requestHint() {
-        if (gameMode != GameMode.AI || !board.getCurrentTurn().equals("White") || hintsRemaining <= 0) {
-            return; // Only allow hints for the player in AI mode
+        // Check if hints are available
+        if (hintsRemaining <= 0) {
+            JOptionPane.showMessageDialog(this, 
+                "No hints remaining for this game.", 
+                "Hint System", JOptionPane.INFORMATION_MESSAGE);
+            return;
         }
-
+        
+        // Check if it's the player's turn (not during AI thinking)
+        if (isAITurn) {
+            JOptionPane.showMessageDialog(this, 
+                "Please wait for the AI to make its move.", 
+                "Hint System", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        // Disable hint button temporarily to prevent spam
+        if (statusPanel.getHintButton() != null) {
+            statusPanel.getHintButton().setEnabled(false);
+            statusPanel.getHintButton().setText("🔄 Thinking...");
+        }
+        
+        logger.info("Hint requested for " + board.getCurrentTurn() + " in " + gameMode + " mode");
+        
         new SwingWorker<Move, Void>() {
             @Override
             protected Move doInBackground() throws Exception {
-                return aiEngine.getBestMove(board, 5); // Use a lower depth for a quick hint
+                if (aiEngine != null && aiEngine.isEngineAvailable()) {
+                    // Use Stockfish for a deeper analysis (reasonable search time for hints)
+                    return aiEngine.getBestMove(board, 2000); // 2 seconds for hint
+                } else {
+                    // Fallback to simple evaluation or random move
+                    logger.warn("Stockfish not available, using fallback for hint");
+                    return aiEngine != null ? aiEngine.getRandomMove(board) : null;
+                }
             }
 
             @Override
@@ -761,12 +788,44 @@ public class ChessGUI extends JFrame {
                 try {
                     Move hintMove = get();
                     if (hintMove != null) {
+                        // Highlight the suggested move
                         boardPanel.highlightHint(hintMove);
+                        
+                        // Log the hint
+                        String moveNotation = hintMove.getFrom().toString() + " → " + hintMove.getTo().toString();
+                        logger.info("Hint generated for " + board.getCurrentTurn() + ": " + moveNotation);
+                        
+                        // Decrement hints remaining
                         hintsRemaining--;
                         statusPanel.setHintsRemaining(hintsRemaining);
+                        
+                        // Show hint information to user
+                        String pieceInfo = hintMove.getPiece().getType() + " " + hintMove.getPiece().getColor();
+                        JOptionPane.showMessageDialog(ChessGUI.this, 
+                            "💡 Hint: Move " + pieceInfo + " from " + 
+                            hintMove.getFrom().toString().toUpperCase() + " to " + 
+                            hintMove.getTo().toString().toUpperCase() + "\n\n" +
+                            "The highlighted squares show the suggested move.\n" +
+                            "Hints remaining: " + hintsRemaining, 
+                            "Game Teacher", JOptionPane.INFORMATION_MESSAGE);
+                            
+                    } else {
+                        logger.warn("Unable to generate hint - no valid move found");
+                        JOptionPane.showMessageDialog(ChessGUI.this, 
+                            "Unable to generate hint at this time.\nPlease try again.", 
+                            "Hint System", JOptionPane.WARNING_MESSAGE);
                     }
                 } catch (Exception e) {
                     logger.error("Error getting hint: " + e.getMessage(), e);
+                    JOptionPane.showMessageDialog(ChessGUI.this, 
+                        "Unable to generate hint at this time.\nError: " + e.getMessage(), 
+                        "Hint System Error", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    // Re-enable hint button
+                    if (statusPanel.getHintButton() != null) {
+                        statusPanel.getHintButton().setEnabled(true);
+                        statusPanel.getHintButton().setText("💡 Get Hint");
+                    }
                 }
             }
         }.execute();
