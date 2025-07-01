@@ -118,7 +118,12 @@ public class Client {
             disconnect();
         } else if (message.startsWith("ERROR:")) {
             String error = message.substring(6);
-            gui.receiveChatMessage("Error: " + error);
+            // Handle move-specific errors differently than general errors
+            if (error.contains("Invalid move") || error.contains("Not your turn") || error.contains("Invalid piece")) {
+                gui.onMoveRejectedByServer(error);
+            } else {
+                gui.receiveChatMessage("Error: " + error);
+            }
         }
     }
     

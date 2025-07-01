@@ -23,33 +23,62 @@ public class GameStatusPanel extends JPanel {
     
     public GameStatusPanel(String gameMode) {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createTitledBorder("Game Status"),
+            BorderFactory.createEmptyBorder(10, 10, 10, 10)
+        ));
         
-        JLabel titleLabel = new JLabel("Game Status");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
-        add(titleLabel);
-        add(Box.createVerticalStrut(20));        turnLabel = new JLabel("Turn: ");
+        // Create components with better styling
+        turnLabel = new JLabel("Turn: ");
+        turnLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        
         movesLabel = new JLabel("Moves: 0");
-        lastMoveLabel = new JLabel("Last Move: None");
-        whiteCapturedLabel = new JLabel("Captured by White: ");
-        blackCapturedLabel = new JLabel("Captured by Black: ");
+        movesLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         
+        lastMoveLabel = new JLabel("Last Move: None");
+        lastMoveLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        
+        whiteCapturedLabel = new JLabel("Captured by White: ");
+        whiteCapturedLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        
+        blackCapturedLabel = new JLabel("Captured by Black: ");
+        blackCapturedLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        
+        // Add components with better spacing
         add(turnLabel);
+        add(Box.createVerticalStrut(8));
         add(movesLabel);
+        add(Box.createVerticalStrut(5));
         add(lastMoveLabel);
-        add(Box.createVerticalStrut(20));
+        add(Box.createVerticalStrut(15));
+        
+        // Captured pieces section
+        JLabel capturedTitle = new JLabel("Captured Pieces:");
+        capturedTitle.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        add(capturedTitle);
+        add(Box.createVerticalStrut(5));
         add(whiteCapturedLabel);
+        add(Box.createVerticalStrut(3));
         add(blackCapturedLabel);
 
         // Only show hint button for AI mode
         if ("AI".equals(gameMode)) {
             add(Box.createVerticalStrut(20));
-            hintButton = new JButton("Get Hint");
+            
+            hintButton = new JButton("💡 Get Hint");
+            hintButton.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            hintButton.setPreferredSize(new Dimension(120, 30));
+            hintButton.setAlignmentX(Component.LEFT_ALIGNMENT);
             add(hintButton);
-
+            
+            add(Box.createVerticalStrut(5));
             hintLabel = new JLabel("Hints remaining: 3");
+            hintLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
             add(hintLabel);
         }
+        
+        // Add some bottom padding
+        add(Box.createVerticalGlue());
     }
       public void setStatus(String status) {
         // Enhanced status display with color coding

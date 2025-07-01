@@ -5,6 +5,7 @@ import com.chess.engine.ChessEngine;
 import com.chess.network.Client;
 import com.chess.utils.Logger;
 import com.chess.utils.GameStateManager;
+import com.chess.Main;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -223,6 +224,8 @@ public class ChessGUI extends JFrame {
         // Only create chat panel for multiplayer modes
         if (mode == GameMode.MULTIPLAYER_HOST || mode == GameMode.MULTIPLAYER_CLIENT) {
             chatPanel = new ChatPanel(this::onChatMessageSent);
+            // Start chat disabled until connection is established
+            chatPanel.setConnectionActive(false);
             // Add welcome message
             SwingUtilities.invokeLater(() -> {
                 chatPanel.addSystemMessage("Connecting to multiplayer game...");
@@ -299,12 +302,21 @@ public class ChessGUI extends JFrame {
             return; // No piece to move
         }
 
-        // Check if the piece belongs to the current player's turn
-        logger.info("Move attempt - Piece color: " + pieceToMove.getColor() + ", Current turn: " + board.getCurrentTurn() + ", Player color: " + this.playerColor);
-        if (!pieceToMove.getColor().equals(board.getCurrentTurn())) {
-            logger.info("Attempted to move " + pieceToMove.getColor() + " piece on " + board.getCurrentTurn() + "'s turn");
-            clearSelection();
-            return; // Not your turn
+        // Check if the piece belongs to the current player in multiplayer mode
+        if (gameMode == GameMode.MULTIPLAYER_HOST || gameMode == GameMode.MULTIPLAYER_CLIENT) {
+            // In multiplayer, check against player's assigned color, not board's current turn
+            if (this.playerColor != null && !pieceToMove.getColor().equals(this.playerColor)) {
+                logger.info("Attempted to move opponent's piece (" + pieceToMove.getColor() + ") - your color is " + this.playerColor);
+                clearSelection();
+                return; // Not your piece
+            }
+        } else {
+            // For local/AI games, check against board's current turn
+            if (!pieceToMove.getColor().equals(board.getCurrentTurn())) {
+                logger.info("Attempted to move " + pieceToMove.getColor() + " piece on " + board.getCurrentTurn() + "'s turn");
+                clearSelection();
+                return; // Not your turn
+            }
         }
         
         // In AI mode, prevent player from moving AI's pieces
@@ -316,27 +328,43 @@ public class ChessGUI extends JFrame {
             }
         }
 
-        Move move = createMove(from, to, pieceToMove, board.getPiece(to));        // First, check if the move is valid. Only animate valid moves.
-        if (board.isValidMove(move)) {
+        Move move = createMove(from, to, pieceToMove, board.getPiece(to));
+        
+        // For multiplayer modes, skip local validation and let server decide
+        if (gameMode == GameMode.MULTIPLAYER_HOST || gameMode == GameMode.MULTIPLAYER_CLIENT) {
+            // In multiplayer, send move to server for validation
+            // The server will validate and either apply or reject the move
+            logger.info("Multiplayer mode: sending move to server for validation: " + move);
             this.pendingMove = move;
-            boardPanel.animateMove(move);
+            
+            // Send move to server immediately without local validation
+            sendMoveToNetwork(move);
+            
+            // Clear selection but don't animate yet - wait for server response
+            clearSelection();
         } else {
-            // If the move is invalid, provide visual feedback
-            logger.info("Invalid move attempted: " + move);
-            
-            // Flash the destination square red to indicate invalid move
-            boardPanel.highlightSquare(to, new Color(255, 0, 0, 180));
-            
-            // Play system beep for audio feedback
-            java.awt.Toolkit.getDefaultToolkit().beep();
-            
-            // Clear highlights after a short delay
-            Timer timer = new Timer(500, e -> {
-                boardPanel.clearHighlights();
-                clearSelection();
-            });
-            timer.setRepeats(false);
-            timer.start();
+            // For local/AI games, validate locally first
+            if (board.isValidMove(move)) {
+                this.pendingMove = move;
+                boardPanel.animateMove(move);
+            } else {
+                // If the move is invalid, provide visual feedback
+                logger.info("Invalid move attempted: " + move);
+                
+                // Flash the destination square red to indicate invalid move
+                boardPanel.highlightSquare(to, new Color(255, 0, 0, 180));
+                
+                // Play system beep for audio feedback
+                java.awt.Toolkit.getDefaultToolkit().beep();
+                
+                // Clear highlights after a short delay
+                Timer timer = new Timer(500, e -> {
+                    boardPanel.clearHighlights();
+                    clearSelection();
+                });
+                timer.setRepeats(false);
+                timer.start();
+            }
         }
     }
 
@@ -584,8 +612,10 @@ public class ChessGUI extends JFrame {
             }
 
             // If in a multiplayer game, send the completed move to the network.
-            if (gameMode == GameMode.MULTIPLAYER_HOST || gameMode == GameMode.MULTIPLAYER_CLIENT) {
-                sendMoveToNetwork(pendingMove);
+            // Only send if this is NOT a multiplayer mode (for local/AI games only)
+            // For multiplayer, we already sent the move in onMoveAttempted()
+            if (gameMode != GameMode.MULTIPLAYER_HOST && gameMode != GameMode.MULTIPLAYER_CLIENT) {
+                // This is for local/AI games only
             }
 
             pendingMove = null;
@@ -891,6 +921,59 @@ public class ChessGUI extends JFrame {
         fileMenu.add(newGameItem);
         
         menuBar.add(fileMenu);
+        
+        // View menu with theme options
+        JMenu viewMenu = new JMenu("View");
+        
+        // Theme submenu
+        JMenu themeMenu = new JMenu("Theme");
+        
+        ButtonGroup themeGroup = new ButtonGroup();
+        
+        JRadioButtonMenuItem lightTheme = new JRadioButtonMenuItem("Light");
+        lightTheme.addActionListener(e -> {
+            Main.applyTheme(Main.Theme.LIGHT);
+            SwingUtilities.updateComponentTreeUI(this);
+        });
+        themeGroup.add(lightTheme);
+        themeMenu.add(lightTheme);
+        
+        JRadioButtonMenuItem darkTheme = new JRadioButtonMenuItem("Dark");
+        darkTheme.addActionListener(e -> {
+            Main.applyTheme(Main.Theme.DARK);
+            SwingUtilities.updateComponentTreeUI(this);
+        });
+        themeGroup.add(darkTheme);
+        themeMenu.add(darkTheme);
+        
+        JRadioButtonMenuItem intellijTheme = new JRadioButtonMenuItem("IntelliJ");
+        intellijTheme.addActionListener(e -> {
+            Main.applyTheme(Main.Theme.INTELLIJ);
+            SwingUtilities.updateComponentTreeUI(this);
+        });
+        themeGroup.add(intellijTheme);
+        themeMenu.add(intellijTheme);
+        
+        JRadioButtonMenuItem darculaTheme = new JRadioButtonMenuItem("Darcula");
+        darculaTheme.addActionListener(e -> {
+            Main.applyTheme(Main.Theme.DARCULA);
+            SwingUtilities.updateComponentTreeUI(this);
+        });
+        themeGroup.add(darculaTheme);
+        themeMenu.add(darculaTheme);
+        
+        // Select current theme
+        Main.Theme currentTheme = Main.getCurrentTheme();
+        switch (currentTheme) {
+            case LIGHT: lightTheme.setSelected(true); break;
+            case DARK: darkTheme.setSelected(true); break;
+            case INTELLIJ: intellijTheme.setSelected(true); break;
+            case DARCULA: darculaTheme.setSelected(true); break;
+        }
+        
+        viewMenu.add(themeMenu);
+        menuBar.add(viewMenu);
+        
         setJMenuBar(menuBar);
     }
     
@@ -1094,5 +1177,37 @@ public class ChessGUI extends JFrame {
                 boardPanel.repaint();
             }
         }
+    }
+
+    public void onMoveRejectedByServer(String reason) {
+        SwingUtilities.invokeLater(() -> {
+            logger.warn("Server rejected move: " + reason);
+            
+            // Show visual feedback for rejected move
+            if (pendingMove != null) {
+                Position to = pendingMove.getTo();
+                // Flash the destination square red to indicate invalid move
+                boardPanel.highlightSquare(to, new Color(255, 0, 0, 180));
+                
+                // Play system beep for audio feedback
+                java.awt.Toolkit.getDefaultToolkit().beep();
+                
+                // Clear highlights after a short delay
+                Timer timer = new Timer(500, e -> {
+                    boardPanel.clearHighlights();
+                });
+                timer.setRepeats(false);
+                timer.start();
+                
+                pendingMove = null;
+            }
+            
+            // Show error message in chat or status
+            if (chatPanel != null) {
+                chatPanel.addMessage("[!] Move rejected: " + reason);
+            } else {
+                statusPanel.setStatus("Invalid move: " + reason);
+            }
+        });
     }
 }

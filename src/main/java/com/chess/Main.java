@@ -5,6 +5,11 @@ import com.chess.network.Server;
 import com.chess.utils.Logger;
 import com.chess.utils.NetworkUtils;
 
+import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatIntelliJLaf;
+import com.formdev.flatlaf.FlatDarculaLaf;
+
 import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
@@ -15,16 +20,37 @@ import java.io.IOException;
 public class Main {
     private static final Logger logger = Logger.getLogger(Main.class);
     
+    // Available FlatLaf themes
+    public enum Theme {
+        LIGHT("Light", FlatLightLaf.class),
+        DARK("Dark", FlatDarkLaf.class),
+        INTELLIJ("IntelliJ", FlatIntelliJLaf.class),
+        DARCULA("Darcula", FlatDarculaLaf.class);
+        
+        private final String displayName;
+        private final Class<? extends LookAndFeel> lafClass;
+        
+        Theme(String displayName, Class<? extends LookAndFeel> lafClass) {
+            this.displayName = displayName;
+            this.lafClass = lafClass;
+        }
+        
+        public String getDisplayName() {
+            return displayName;
+        }
+        
+        public Class<? extends LookAndFeel> getLafClass() {
+            return lafClass;
+        }
+    }
+    
+    private static Theme currentTheme = Theme.LIGHT; // Default theme
+    
     public static void main(String[] args) {
         logger.info("Chess Game starting...");
         
-        // Set system look and feel
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            logger.info("Look and feel set successfully");
-        } catch (Exception e) {
-            logger.warn("Could not set system look and feel: " + e.getMessage());
-        }
+        // Initialize FlatLaf theme before creating any GUI components
+        initializeFlatLaf();
         
         // Parse command line arguments
         if (args.length > 0) {
@@ -52,6 +78,59 @@ public class Main {
         }
     }
     
+    /**
+     * Initialize FlatLaf Look and Feel
+     */
+    private static void initializeFlatLaf() {
+        try {
+            // Set system properties for better FlatLaf appearance
+            System.setProperty("flatlaf.useWindowDecorations", "false");
+            System.setProperty("flatlaf.menuBarEmbedded", "false");
+            
+            // Apply the default theme
+            applyTheme(currentTheme);
+            
+            logger.info("FlatLaf " + currentTheme.getDisplayName() + " theme applied successfully");
+        } catch (Exception e) {
+            logger.warn("Failed to initialize FlatLaf, falling back to system look and feel: " + e.getMessage());
+            // Fallback to system look and feel
+            try {
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            } catch (Exception ex) {
+                logger.warn("Could not set system look and feel: " + ex.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Apply a specific FlatLaf theme
+     */
+    public static void applyTheme(Theme theme) {
+        try {
+            UIManager.setLookAndFeel(theme.getLafClass().getDeclaredConstructor().newInstance());
+            currentTheme = theme;
+            
+            // Update all existing windows
+            SwingUtilities.invokeLater(() -> {
+                for (Window window : Window.getWindows()) {
+                    SwingUtilities.updateComponentTreeUI(window);
+                }
+            });
+            
+            logger.info("Applied theme: " + theme.getDisplayName());
+        } catch (Exception e) {
+            logger.error("Failed to apply theme " + theme.getDisplayName() + ": " + e.getMessage());
+            throw new RuntimeException("Failed to apply theme", e);
+        }
+    }
+    
+    /**
+     * Get the current theme
+     */
+    public static Theme getCurrentTheme() {
+        return currentTheme;
+    }
+    
     private static void showMainMenu() {
         logger.info("Creating main menu...");
         SwingUtilities.invokeLater(() -> {
@@ -59,38 +138,48 @@ public class Main {
                 // Create the main frame
                 JFrame frame = new JFrame("Chess Game - Main Menu");
                 frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-                frame.setSize(400, 300);
+                frame.setSize(500, 450);
                 frame.setLocationRelativeTo(null);
                 frame.setResizable(false);
                 
-                // Create a simple panel with FlowLayout
-                JPanel panel = new JPanel();
-                panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-                panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+                // Create main panel with better layout
+                JPanel mainPanel = new JPanel(new BorderLayout());
+                mainPanel.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
+                
+                // Header panel with title and theme selector
+                JPanel headerPanel = new JPanel(new BorderLayout());
                 
                 // Add title
-                JLabel title = new JLabel("Chess Game");
-                title.setAlignmentX(Component.CENTER_ALIGNMENT);
-                title.setFont(new Font("Arial", Font.BOLD, 20));
-                panel.add(title);
-                panel.add(Box.createVerticalStrut(20));
+                JLabel title = new JLabel("Chess Game", SwingConstants.CENTER);
+                title.setFont(new Font("Segoe UI", Font.BOLD, 28));
+                headerPanel.add(title, BorderLayout.CENTER);
                 
-                // Create buttons with simple styling
-                JButton localGameBtn = new JButton("Hot-Seat Game (2 Players)");
-                JButton aiGameBtn = new JButton("Play vs AI");
-                JButton hostGameBtn = new JButton("Host Online Game");
-                JButton joinGameBtn = new JButton("Join Online Game");
+                // Add theme selector
+                JPanel themePanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+                JLabel themeLabel = new JLabel("Theme:");
+                JComboBox<Theme> themeComboBox = new JComboBox<>(Theme.values());
+                themeComboBox.setSelectedItem(currentTheme);
+                themeComboBox.addActionListener(e -> {
+                    Theme selectedTheme = (Theme) themeComboBox.getSelectedItem();
+                    if (selectedTheme != null && selectedTheme != currentTheme) {
+                        applyTheme(selectedTheme);
+                    }
+                });
                 
-                // Set button properties
-                localGameBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-                aiGameBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-                hostGameBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-                joinGameBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+                themePanel.add(themeLabel);
+                themePanel.add(themeComboBox);
+                headerPanel.add(themePanel, BorderLayout.EAST);
                 
-                localGameBtn.setMaximumSize(new Dimension(200, 40));
-                aiGameBtn.setMaximumSize(new Dimension(200, 40));
-                hostGameBtn.setMaximumSize(new Dimension(200, 40));
-                joinGameBtn.setMaximumSize(new Dimension(200, 40));
+                // Center panel with game mode buttons
+                JPanel centerPanel = new JPanel();
+                centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+                centerPanel.setBorder(BorderFactory.createEmptyBorder(30, 0, 0, 0));
+                
+                // Create stylized buttons
+                JButton localGameBtn = createStyledButton("🏠 Hot-Seat Game", "Play with a friend on the same computer");
+                JButton aiGameBtn = createStyledButton("🤖 Play vs AI", "Challenge the computer opponent");
+                JButton hostGameBtn = createStyledButton("🌐 Host Online Game", "Create a game for others to join");
+                JButton joinGameBtn = createStyledButton("🔗 Join Online Game", "Join an existing online game");
                 
                 // Add action listeners
                 localGameBtn.addActionListener(e -> {
@@ -117,36 +206,65 @@ public class Main {
                     startClient();
                 });
                 
-                // Add buttons to panel
-                panel.add(localGameBtn);
-                panel.add(Box.createVerticalStrut(10));
-                panel.add(aiGameBtn);
-                panel.add(Box.createVerticalStrut(10));
-                panel.add(hostGameBtn);
-                panel.add(Box.createVerticalStrut(10));
-                panel.add(joinGameBtn);
+                // Add buttons to center panel
+                centerPanel.add(localGameBtn);
+                centerPanel.add(Box.createVerticalStrut(15));
+                centerPanel.add(aiGameBtn);
+                centerPanel.add(Box.createVerticalStrut(15));
+                centerPanel.add(hostGameBtn);
+                centerPanel.add(Box.createVerticalStrut(15));
+                centerPanel.add(joinGameBtn);
                 
-                // Add panel to frame
-                frame.add(panel);
+                // Footer panel with version info
+                JPanel footerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+                JLabel versionLabel = new JLabel("Chess Game v1.0.0 - Modern UI with FlatLaf");
+                versionLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+                footerPanel.add(versionLabel);
+                
+                // Add all panels to main panel
+                mainPanel.add(headerPanel, BorderLayout.NORTH);
+                mainPanel.add(centerPanel, BorderLayout.CENTER);
+                mainPanel.add(footerPanel, BorderLayout.SOUTH);
+                
+                // Add main panel to frame
+                frame.add(mainPanel);
                 
                 // Make frame visible
                 frame.setVisible(true);
                 frame.toFront();
                 
-                logger.debug("Main menu window is now visible with " + panel.getComponentCount() + " components");
-                
-                // Print component info for debugging
-                for (int i = 0; i < panel.getComponentCount(); i++) {
-                    Component comp = panel.getComponent(i);
-                    logger.debug("Component " + i + ": " + comp.getClass().getSimpleName() + 
-                                     (comp instanceof JButton ? " - " + ((JButton)comp).getText() : ""));
-                }
+                logger.debug("Enhanced main menu window is now visible");
                 
             } catch (Exception e) {
                 System.err.println("Error creating main menu: " + e.getMessage());
                 e.printStackTrace();
             }
         });
+    }
+    
+    /**
+     * Create a styled button with modern appearance
+     */
+    private static JButton createStyledButton(String text, String tooltip) {
+        JButton button = new JButton(text);
+        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+        button.setMaximumSize(new Dimension(300, 50));
+        button.setPreferredSize(new Dimension(300, 50));
+        button.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        button.setToolTipText(tooltip);
+        button.setFocusPainted(false);
+        
+        // Add hover effect
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+            }
+        });
+        
+        return button;
     }
     
     public static void startLocalGame() {

@@ -29,6 +29,7 @@ public class ChatPanel extends JPanel {
     
     public ChatPanel(Consumer<String> messageCallback) {
         this.messageCallback = messageCallback;
+        this.connectionActive = false; // Start disabled
         setPreferredSize(new Dimension(300, 250));
         setMinimumSize(new Dimension(300, 250));
         setBorder(BorderFactory.createTitledBorder("Chat"));
@@ -44,9 +45,8 @@ public class ChatPanel extends JPanel {
         chatArea.setEditable(false);
         chatArea.setLineWrap(true);
         chatArea.setWrapStyleWord(true);
-        chatArea.setFont(new Font("Arial", Font.PLAIN, 13));
-        chatArea.setBackground(new Color(248, 248, 248));
-        chatArea.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        chatArea.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        chatArea.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
         // Enable Unicode emoji support
         String welcomeMessage = EmojiUtils.enhanceWithEmojis("Welcome to the chat! Use emojis like :) <chess> :D\n");
@@ -55,24 +55,29 @@ public class ChatPanel extends JPanel {
         scrollPane = new JScrollPane(chatArea);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setBorder(BorderFactory.createLoweredBevelBorder());
         add(scrollPane, BorderLayout.CENTER);
         
         // Message input panel
         JPanel inputPanel = new JPanel(new BorderLayout());
-        inputPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        inputPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
         messageField = new JTextField();
-        messageField.setFont(new Font("Arial", Font.PLAIN, 13));
+        messageField.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         messageField.setToolTipText("Type your message here (emojis supported: :) <chess> :D +1)");
+        messageField.setPreferredSize(new Dimension(0, 30));
         
-        sendButton = new JButton(EmojiUtils.enhanceWithEmojis("Send >>"));
+        sendButton = new JButton("📨 Send");
         sendButton.setPreferredSize(new Dimension(90, 30));
-        sendButton.setBackground(new Color(70, 130, 180));
-        sendButton.setForeground(Color.WHITE);
+        sendButton.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         sendButton.setFocusPainted(false);
         
+        // Start disabled
+        sendButton.setEnabled(false);
+        messageField.setEnabled(false);
+        
         inputPanel.add(messageField, BorderLayout.CENTER);
-        inputPanel.add(Box.createHorizontalStrut(5), BorderLayout.CENTER);
+        inputPanel.add(Box.createHorizontalStrut(8), BorderLayout.CENTER);
         inputPanel.add(sendButton, BorderLayout.EAST);
         
         add(inputPanel, BorderLayout.SOUTH);
