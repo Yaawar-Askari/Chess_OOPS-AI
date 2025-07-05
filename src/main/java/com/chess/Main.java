@@ -236,7 +236,7 @@ public class Main {
                 logger.debug("Enhanced main menu window is now visible");
                 
             } catch (Exception e) {
-                System.err.println("Error creating main menu: " + e.getMessage());
+                logger.error("Error creating main menu: " + e.getMessage());
                 e.printStackTrace();
             }
         });

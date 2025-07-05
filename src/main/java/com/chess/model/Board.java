@@ -82,10 +82,16 @@ public class Board {
         return grid[position.getRow()][position.getCol()];
     }
     
+    /**
+     * Simple move method for testing - moves a piece from one position to another
+     */
     public void move(Position from, Position to) {
         Piece piece = getPiece(from);
-        setPiece(to, piece);
-        setPiece(from, null);
+        if (piece != null) {
+            setPiece(to, piece);
+            setPiece(from, null);
+            piece.setPosition(to);
+        }
     }
     
     public void setPiece(Position position, Piece piece) {
@@ -233,6 +239,45 @@ public class Board {
         // Final check: ensure move doesn't leave own king in check
         return !wouldLeaveKingInCheck(move);
     }
+
+    /**
+     * Check if a move is valid, ignoring whose turn it is.
+     * This is for checkmate/stalemate calculations.
+     */
+    private boolean isMoveValidIgnoringTurn(Move move) {
+        Piece piece = move.getPiece();
+        Position from = move.getFrom();
+        Position to = move.getTo();
+        
+        // Basic validation
+        if (piece == null || !from.isValid() || !to.isValid()) {
+            return false;
+        }
+        
+        // Check if destination is the same as source
+        if (from.equals(to)) {
+            return false;
+        }
+        
+        // Check if destination has friendly piece
+        Piece destinationPiece = getPiece(to);
+        if (destinationPiece != null && destinationPiece.getColor().equals(piece.getColor())) {
+            return false;
+        }
+        
+        // Check if the move is pseudo-legal for the piece type
+        if (!isPseudoLegalMove(piece, from, to)) {
+            return false;
+        }
+        
+        // Handle special move types
+        if (!isSpecialMoveValid(move)) {
+            return false;
+        }
+        
+        // Final check: ensure move doesn't leave own king in check
+        return !wouldLeaveKingInCheck(move);
+    }
     
     /**
      * Check if a move is pseudo-legal (ignoring check considerations)
@@ -320,19 +365,24 @@ public class Board {
                                    move.getPromotionPiece(), false, false);
         
         // Execute the move on the temporary board
-        tempBoard.executeMoveUnsafe(clonedMove);
+        tempBoard.simulateMove(clonedMove);
         
         // Check if own king is in check
         return tempBoard.isInCheck(move.getPiece().getColor());
     }
     
     /**
-     * Execute a move without validation (for internal use)
+     * Execute a move without validation (for internal use and simulation).
+     * This method should only be called on a cloned board for simulation.
      */
-    private void executeMoveUnsafe(Move move) {
+    public void simulateMove(Move move) {
         Position from = move.getFrom();
         Position to = move.getTo();
-        Piece piece = move.getPiece();
+        Piece piece = getPiece(from);
+
+        if (piece == null) {
+            return; // Should not happen in valid simulation
+        }
         
         // Handle special moves
         switch (move.getType()) {
@@ -608,9 +658,17 @@ public class Board {
             for (int col = 0; col < 8; col++) {
                 Piece piece = grid[row][col];
                 if (piece != null && piece.getColor().equals(color)) {
-                    List<Position> validMoves = piece.getValidMoves(this);
-                    if (!validMoves.isEmpty()) {
-                        return true;
+                    List<Position> moves = piece.getPseudoLegalMoves(this);
+                    for (Position to : moves) {
+                        Move move = new Move(piece.getPosition(), to, piece, getPiece(to), Move.MoveType.NORMAL, null, false, false);
+                        
+                        // We need to check if the move is valid in a context where it's this player's turn
+                        Board tempBoard = this.clone();
+                        tempBoard.setCurrentTurn(color);
+
+                        if (tempBoard.isValidMove(move)) {
+                            return true;
+                        }
                     }
                 }
             }
@@ -809,6 +867,29 @@ public class Board {
         return null; // Game continues
     }
     
+    /**
+     * Determines the type of a move based on the piece and destination.
+     * This is public to be accessible for move validation logic.
+     */
+    public Move.MoveType determineMoveType(Piece piece, Position from, Position to) {
+        if (piece.getType().equals("Pawn")) {
+            // Check for promotion
+            if ((piece.getColor().equals("White") && to.getRow() == 0) || (piece.getColor().equals("Black") && to.getRow() == 7)) {
+                return Move.MoveType.PAWN_PROMOTION;
+            }
+            // Check for en passant
+            if (to.equals(getEnPassantTarget()) && getPiece(to) == null && Math.abs(from.getCol() - to.getCol()) == 1) {
+                return Move.MoveType.EN_PASSANT;
+            }
+        } else if (piece.getType().equals("King")) {
+            // Check for castling
+            if (Math.abs(from.getCol() - to.getCol()) == 2) {
+                return to.getCol() > from.getCol() ? Move.MoveType.CASTLE_KINGSIDE : Move.MoveType.CASTLE_QUEENSIDE;
+            }
+        }
+        return Move.MoveType.NORMAL;
+    }
+
     /**
      * Check if there's insufficient material for checkmate
      */

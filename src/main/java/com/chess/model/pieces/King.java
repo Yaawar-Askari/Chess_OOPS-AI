@@ -1,6 +1,7 @@
 package com.chess.model.pieces;
 
 import com.chess.model.Board;
+import com.chess.model.Move;
 import com.chess.model.Piece;
 import com.chess.model.Position;
 
@@ -27,14 +28,23 @@ public class King extends Piece {
         
         // Get basic moves
         List<Position> possibleMoves = getPossibleMoves(board);
-        for (Position move : possibleMoves) {
-            if (isValidMove(board, move)) {
-                validMoves.add(move);
-            }
-        }
         
         // Add castling moves
-        validMoves.addAll(getCastlingMoves(board));
+        possibleMoves.addAll(getCastlingMoves(board));
+
+        for (Position destination : possibleMoves) {
+            Move.MoveType type = board.determineMoveType(this, this.position, destination);
+            Piece capturedPiece = board.getPiece(destination);
+            Move move = new Move(this.position, destination, this, capturedPiece, type, null, false, false);
+
+            // Create a temporary board to check the move without changing the turn
+            Board tempBoard = board.clone();
+            tempBoard.setCurrentTurn(this.getColor());
+
+            if (tempBoard.isValidMove(move)) {
+                validMoves.add(destination);
+            }
+        }
         
         return validMoves;
     }

@@ -1,0 +1,8 @@
+-------------------------------------------------------------------------------
+Test set: com.chess.model.MoveValidationTest
+-------------------------------------------------------------------------------
+Tests run: 9, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.001 s <<< FAILURE! - in com.chess.model.MoveValidationTest
+testGameEndingConditions  Time elapsed: 0 s  <<< FAILURE!
+org.opentest4j.AssertionFailedError: Should detect checkmate for Black ==> expected: <CHECKMATE_BLACK> but was: <null>
+	at com.chess.model.MoveValidationTest.testGameEndingConditions(MoveValidationTest.java:199)
+

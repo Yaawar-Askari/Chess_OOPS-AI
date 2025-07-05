@@ -40,15 +40,24 @@ public abstract class Piece {
     
     public abstract String getType();
     
+    /**
+     * Get all valid moves for this piece (excluding moves that would leave king in check)
+     */
     public List<Position> getValidMoves(Board board) {
+        List<Position> possibleDestinations = getPossibleMoves(board);
         List<Position> validMoves = new ArrayList<>();
-        List<Position> possibleMoves = getPossibleMoves(board);
+        
+        for (Position destination : possibleDestinations) {
+            Move.MoveType type = board.determineMoveType(this, this.position, destination);
+            Piece capturedPiece = board.getPiece(destination);
+            Move move = new Move(this.position, destination, this, capturedPiece, type, null, false, false);
 
-        for (Position move : possibleMoves) {
-            if (isValidMove(board, move)) {
-                validMoves.add(move);
+            // Use the board's validation which correctly simulates the move
+            if (board.isValidMove(move)) {
+                validMoves.add(destination);
             }
         }
+        
         return validMoves;
     }
     
@@ -102,6 +111,13 @@ public abstract class Piece {
         
         return moves;
     }
+
+    /**
+     * A wrapper for getPossibleMoves to be used publicly
+     */
+    public List<Position> getPseudoLegalMoves(Board board) {
+        return getPossibleMoves(board);
+    }
     
     /**
      * Check if this piece can move in the given direction
@@ -120,35 +136,7 @@ public abstract class Piece {
      * Check if this piece can move multiple squares in one direction
      */
     protected abstract boolean canMoveMultipleSquares();
-    
-    /**
-     * Check if a move is valid (doesn't leave own king in check)
-     */
-    public boolean isValidMove(Board board, Position destination) {
-        // Check if destination is in possible moves
-        List<Position> possibleMoves = getPossibleMoves(board);
-        if (!possibleMoves.contains(destination)) {
-            return false;
-        }
-        
-        // Check if move would leave own king in check
-        return !wouldLeaveKingInCheck(board, destination);
-    }
-    
-    /**
-     * Check if moving this piece to destination would leave own king in check
-     */
-    protected boolean wouldLeaveKingInCheck(Board board, Position destination) {
-        // Create a temporary board to test the move
-        Board tempBoard = board.clone();
-        
-        // Make the move on temporary board
-        tempBoard.move(position, destination);
-        
-        // Check if own king is in check
-        return tempBoard.isInCheck(color);
-    }
-    
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
@@ -167,4 +155,4 @@ public abstract class Piece {
     public String toString() {
         return color + " " + getType() + " at " + position;
     }
-} 
+}

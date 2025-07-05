@@ -1,7 +1,8 @@
 package com.chess.model;
 
-import org.junit.*;
-import static org.junit.Assert.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Simple tests to verify basic move validation functionality
@@ -10,7 +11,7 @@ public class SimpleMoveTest {
     
     private Board board;
     
-    @Before
+    @BeforeEach
     public void setUp() {
         board = new Board();
     }
@@ -22,11 +23,11 @@ public class SimpleMoveTest {
         Position to = new Position(5, 4);   // e3
         
         Piece pawn = board.getPiece(from);
-        assertNotNull("Pawn should exist at e2", pawn);
-        assertEquals("Should be a pawn", "Pawn", pawn.getType());
+        assertNotNull(pawn, "Pawn should exist at e2");
+        assertEquals("Pawn", pawn.getType(), "Should be a pawn");
         
         Move move = new Move(from, to, pawn, null);
-        assertTrue("Pawn should be able to move forward one square", board.isValidMove(move));
+        assertTrue(board.isValidMove(move), "Pawn should be able to move forward one square");
     }
     
     @Test
@@ -37,7 +38,7 @@ public class SimpleMoveTest {
         
         Piece pawn = board.getPiece(from);
         Move move = new Move(from, to, pawn, null);
-        assertFalse("Pawn should not be able to move 3 squares forward", board.isValidMove(move));
+        assertFalse(board.isValidMove(move), "Pawn should not be able to move 3 squares forward");
     }
     
     @Test
@@ -56,9 +57,9 @@ public class SimpleMoveTest {
             
             // This is a simple test - just ensure the board state is accessible
             String currentTurn = board.getCurrentTurn();
-            assertNotNull("Current turn should not be null", currentTurn);
-            assertTrue("Current turn should be White or Black", 
-                      currentTurn.equals("White") || currentTurn.equals("Black"));
+            assertNotNull(currentTurn, "Current turn should not be null");
+            assertTrue(currentTurn.equals("White") || currentTurn.equals("Black"), 
+                      "Current turn should be White or Black");
                       
         } catch (Exception e) {
             fail("Board operations should not throw exceptions: " + e.getMessage());

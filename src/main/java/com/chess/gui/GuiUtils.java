@@ -1,5 +1,7 @@
 package com.chess.gui;
 
+import com.chess.utils.Logger;
+
 import javax.swing.*;
 import java.awt.*;
 
@@ -7,6 +9,7 @@ import java.awt.*;
  * Utility class for GUI stability improvements and common operations
  */
 public class GuiUtils {
+    private static final Logger logger = Logger.getLogger(GuiUtils.class);
     
     /**
      * Safely executes a GUI operation on the EDT
@@ -16,7 +19,7 @@ public class GuiUtils {
             try {
                 operation.run();
             } catch (Exception e) {
-                System.err.println("Error in EDT operation: " + e.getMessage());
+                logger.error("Error in EDT operation: " + e.getMessage());
                 e.printStackTrace();
             }
         } else {
@@ -24,7 +27,7 @@ public class GuiUtils {
                 try {
                     operation.run();
                 } catch (Exception e) {
-                    System.err.println("Error in EDT operation: " + e.getMessage());
+                    logger.error("Error in EDT operation: " + e.getMessage());
                     e.printStackTrace();
                 }
             });
