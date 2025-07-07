@@ -16,6 +16,7 @@ public class GameStatusPanel extends JPanel {
     private JLabel blackCapturedLabel;
     private JButton hintButton;
     private JLabel hintLabel;
+    private JLabel teacherTitle;
 
     public GameStatusPanel() {
         this(null);
@@ -61,25 +62,30 @@ public class GameStatusPanel extends JPanel {
         add(Box.createVerticalStrut(3));
         add(blackCapturedLabel);
 
-        // Game Teacher (Hint System) - available in all modes
-        add(Box.createVerticalStrut(20));
+        // Game Teacher (Hint System) - only available in non-multiplayer modes
+        boolean isMultiplayer = gameMode != null && 
+            (gameMode.equals("MULTIPLAYER_HOST") || gameMode.equals("MULTIPLAYER_CLIENT"));
         
-        JLabel teacherTitle = new JLabel("Game Teacher:");
-        teacherTitle.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        add(teacherTitle);
-        add(Box.createVerticalStrut(5));
-        
-        hintButton = new JButton("💡 Get Hint");
-        hintButton.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        hintButton.setPreferredSize(new Dimension(120, 30));
-        hintButton.setAlignmentX(Component.LEFT_ALIGNMENT);
-        hintButton.setToolTipText("Get a move suggestion from the AI teacher");
-        add(hintButton);
-        
-        add(Box.createVerticalStrut(5));
-        hintLabel = new JLabel("Hints remaining: 3");
-        hintLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
-        add(hintLabel);
+        if (!isMultiplayer) {
+            add(Box.createVerticalStrut(20));
+            
+            teacherTitle = new JLabel("Game Teacher:");
+            teacherTitle.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            add(teacherTitle);
+            add(Box.createVerticalStrut(5));
+            
+            hintButton = new JButton("💡 Get Hint");
+            hintButton.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            hintButton.setPreferredSize(new Dimension(120, 30));
+            hintButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+            hintButton.setToolTipText("Get a move suggestion from the AI teacher");
+            add(hintButton);
+            
+            add(Box.createVerticalStrut(5));
+            hintLabel = new JLabel("Hints remaining: 3");
+            hintLabel.setFont(new Font("Segoe UI", Font.ITALIC, 11));
+            add(hintLabel);
+        }
         
         // Add some bottom padding
         add(Box.createVerticalGlue());

@@ -457,8 +457,12 @@ public class ChessGUI extends JFrame {
     public void receiveChatMessage(String message) {
         SwingUtilities.invokeLater(() -> {
             if (chatPanel != null) {
-                chatPanel.addMessage(message);
-                logger.info("Chat message received and displayed: " + message);
+                // If the message is from this player, format as "You: ..."
+                if (playerColor != null && message.startsWith(playerColor + ":")) {
+                    chatPanel.addMessage("You:" + message.substring(playerColor.length() + 1));
+                } else {
+                    chatPanel.addMessage(message);
+                }
             } else {
                 // For non-multiplayer modes, log the message
                 logger.info("Chat message received (no chat panel): " + message);
@@ -509,9 +513,6 @@ public class ChessGUI extends JFrame {
     public void sendChatMessage(String message) {
         if (networkClient != null) {
             networkClient.sendChatMessage(message);
-        }
-        if (chatPanel != null) {
-            chatPanel.addMessage("You: " + message);
         }
     }
     

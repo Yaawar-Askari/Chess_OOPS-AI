@@ -273,16 +273,19 @@ public class Server {
         }
         
         private Move parseMove(String moveString) {
-            // This method now only parses the positions, the server validates the piece
+            // This method now parses the positions and looks up the piece on the server's board
             if (moveString.length() != 4) {
                 throw new IllegalArgumentException("Invalid move format: " + moveString);
             }
             
             Position from = new Position(moveString.substring(0, 2));
             Position to = new Position(moveString.substring(2, 4));
-            
-            // The piece information will be filled in by the server based on its board state
-            return new Move(from, to, null, null);
+            Piece piece = server.gameBoard.getPiece(from);
+            Piece captured = server.gameBoard.getPiece(to);
+            if (piece == null) {
+                throw new IllegalArgumentException("No piece at " + from);
+            }
+            return new Move(from, to, piece, captured);
         }
         
         public void sendMessage(String message) {

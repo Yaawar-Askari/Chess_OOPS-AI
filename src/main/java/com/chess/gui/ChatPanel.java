@@ -21,7 +21,7 @@ public class ChatPanel extends JPanel {
     private JButton sendButton;
     private JScrollPane scrollPane;
     private Consumer<String> messageCallback;
-    private boolean connectionActive = true;
+    private boolean connectionActive = false;
     
     public ChatPanel() {
         this(null);
@@ -77,7 +77,6 @@ public class ChatPanel extends JPanel {
         messageField.setEnabled(false);
         
         inputPanel.add(messageField, BorderLayout.CENTER);
-        inputPanel.add(Box.createHorizontalStrut(8), BorderLayout.CENTER);
         inputPanel.add(sendButton, BorderLayout.EAST);
         
         add(inputPanel, BorderLayout.SOUTH);
