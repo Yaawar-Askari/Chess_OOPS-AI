@@ -158,17 +158,23 @@ public class Server {
             // This ensures both players always have identical board states
             broadcast("BOARD:" + gameBoard.toFEN());
 
-            // Check for game end conditions
-            if (gameBoard.isCheckmate(gameBoard.getCurrentTurn())) {
-                String winner = gameBoard.getCurrentTurn().equals("White") ? "Black" : "White";
-                broadcast("GAMEOVER:Checkmate! " + winner + " wins!");
-            } else if (gameBoard.isStalemate(gameBoard.getCurrentTurn())) {
-                broadcast("GAMEOVER:Stalemate! It's a draw.");
+            // Check for all game end conditions
+            String endCondition = gameBoard.checkGameEndingConditions();
+            if (endCondition != null) {
+                if (endCondition.startsWith("CHECKMATE_WHITE")) {
+                    broadcast("GAMEOVER:Checkmate! White wins!");
+                } else if (endCondition.startsWith("CHECKMATE_BLACK")) {
+                    broadcast("GAMEOVER:Checkmate! Black wins!");
+                } else if (endCondition.equals("STALEMATE")) {
+                    broadcast("GAMEOVER:Stalemate! It's a draw.");
+                } else if (endCondition.equals("DRAW")) {
+                    broadcast("GAMEOVER:Draw! (50-move rule or insufficient material)");
+                }
             } else {
-                 broadcast("TURN:" + gameBoard.getCurrentTurn());
-                 if(gameBoard.isInCheck(gameBoard.getCurrentTurn())) {
-                     broadcast("CHAT:Check!");
-                 }
+                broadcast("TURN:" + gameBoard.getCurrentTurn());
+                if(gameBoard.isInCheck(gameBoard.getCurrentTurn())) {
+                    broadcast("CHAT:Check!");
+                }
             }
         } else {
             logger.warn("Move validation failed: " + move.getFrom() + " to " + move.getTo() + " is not a valid move");
