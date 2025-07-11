@@ -358,13 +358,11 @@ public class ChessGUI extends JFrame {
                 // Flash the destination square red to indicate invalid move
                 boardPanel.highlightSquare(to, new Color(255, 0, 0, 180));
                 
-                // Play system beep for audio feedback
-                java.awt.Toolkit.getDefaultToolkit().beep();
-                
-                // Clear highlights after a short delay
+                // After a short delay, restore valid move highlights for the selected piece
                 Timer timer = new Timer(500, e -> {
-                    boardPanel.clearHighlights();
-                    clearSelection();
+                    if (pieceToMove != null) {
+                        boardPanel.highlightValidMoves(pieceToMove);
+                    }
                 });
                 timer.setRepeats(false);
                 timer.start();
@@ -426,7 +424,7 @@ public class ChessGUI extends JFrame {
             if (gameResult != null) {
                 // Game is over, show summary dialog
                 String displayMessage = getGameEndDisplayMessage(gameResult);
-                GameSummaryDialog.showGameSummary(this, displayMessage);
+                showEndGameScreen(displayMessage);
                 return; // Don't continue with normal updates
             }
             
@@ -610,7 +608,7 @@ public class ChessGUI extends JFrame {
                     // Game is over, show summary dialog
                     String displayMessage = getGameEndDisplayMessage(gameResult);
                     SwingUtilities.invokeLater(() -> {
-                        GameSummaryDialog.showGameSummary(this, displayMessage);
+                        showEndGameScreen(displayMessage);
                     });
                     return; // Don't continue with normal updates
                 }
@@ -687,53 +685,23 @@ public class ChessGUI extends JFrame {
 
         // Show the dialog on the EDT to be safe
         SwingUtilities.invokeLater(() -> {
-            Object[] options = {"Play Again", "Main Menu", "Exit"};
+            Object[] options = {"Main Menu", "Exit"};
             int choice = JOptionPane.showOptionDialog(this,
                     textArea,
                     "Game Over",
-                    JOptionPane.YES_NO_CANCEL_OPTION,
+                    JOptionPane.YES_NO_OPTION,
                     JOptionPane.INFORMATION_MESSAGE,
                     null,
                     options,
                     options[0]);
 
             if (choice == JOptionPane.YES_OPTION) {
-                // Play Again - restart the same game mode
-                this.dispose();
-                SwingUtilities.invokeLater(() -> {
-                    ChessGUI newGui = new ChessGUI();
-                    switch (gameMode) {
-                        case LOCAL:
-                            newGui.startLocalGame();
-                            break;
-                        case AI:
-                            newGui.startAIGame();
-                            break;
-                        case HOST:
-                            // Note: Host and server functionality needs to be re-implemented
-                            // For now, start local game
-                            newGui.startLocalGame();
-                            break;
-                        case CLIENT:
-                            // Note: Client functionality needs to be re-implemented
-                            // For now, start local game
-                            newGui.startLocalGame();
-                            break;
-                        case MULTIPLAYER_HOST:
-                            // Note: Multiplayer host functionality needs to be re-implemented
-                            // For now, start local game
-                            newGui.startLocalGame();
-                            break;
-                        case MULTIPLAYER_CLIENT:
-                            // Note: Multiplayer client functionality needs to be re-implemented
-                            // For now, start local game
-                            newGui.startLocalGame();
-                            break;
+                // Main Menu - close socket if multiplayer, then restart the application
+                if (gameMode == GameMode.MULTIPLAYER_HOST || gameMode == GameMode.MULTIPLAYER_CLIENT) {
+                    if (networkClient != null) {
+                        networkClient.disconnect();
                     }
-                    newGui.setVisible(true);
-                });
-            } else if (choice == JOptionPane.NO_OPTION) {
-                // Main Menu - restart the application
+                }
                 this.dispose();
                 SwingUtilities.invokeLater(() -> {
                     try {
@@ -743,7 +711,7 @@ public class ChessGUI extends JFrame {
                         System.exit(0);
                     }
                 });
-            } else {
+            } else if (choice == JOptionPane.NO_OPTION) {
                 // Exit
                 System.exit(0);
             }
@@ -1253,9 +1221,6 @@ public class ChessGUI extends JFrame {
                 // Flash the destination square red to indicate invalid move
                 boardPanel.highlightSquare(to, new Color(255, 0, 0, 180));
                 
-                // Play system beep for audio feedback
-                java.awt.Toolkit.getDefaultToolkit().beep();
-                
                 // Clear highlights after a short delay
                 Timer timer = new Timer(500, e -> {
                     boardPanel.clearHighlights();
@@ -1273,5 +1238,16 @@ public class ChessGUI extends JFrame {
                 statusPanel.setStatus("Invalid move: " + reason);
             }
         });
+    }
+
+    public void setSelectedFrom(Position pos) {
+        this.selectedFrom = pos;
+    }
+    public void clearSelectedFrom() {
+        this.selectedFrom = null;
+    }
+
+    public Position getSelectedFrom() {
+        return this.selectedFrom;
     }
 }

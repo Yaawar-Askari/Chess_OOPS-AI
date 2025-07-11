@@ -197,17 +197,42 @@ public class ChessBoardPanel extends JPanel {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (!interactionEnabled) return; // Respect interaction enabled flag
-                
                 // Only handle clicks if not dragging
                 if (!isDragging) {
                     int clickedCol = e.getX() / SQUARE_SIZE;
                     int clickedRow = e.getY() / SQUARE_SIZE;
-                    
                     if (clickedCol >= 0 && clickedCol < 8 && clickedRow >= 0 && clickedRow < 8) {
                         int logicalRow = "White".equals(playerColor) ? clickedRow : 7 - clickedRow;
                         int logicalCol = "White".equals(playerColor) ? clickedCol : 7 - clickedCol;
                         Position position = new Position(logicalRow, logicalCol);
-                        parent.onSquareClicked(position);
+                        Piece piece = board.getPiece(position);
+                        Position selected = parent.getSelectedFrom();
+                        if (selected != null) {
+                            // If a piece is already selected, try to move it to the clicked square
+                            if (!selected.equals(position)) {
+                                parent.onMoveAttempted(selected, position);
+                                // After move attempt, clear selection and highlights
+                                clearHighlights();
+                                parent.clearSelectedFrom();
+                            } else {
+                                // Clicked the same piece again: just re-highlight
+                                if (piece != null && piece.getColor().equals(board.getCurrentTurn())) {
+                                    highlightValidMoves(piece);
+                                    parent.setSelectedFrom(position);
+                                }
+                            }
+                        } else if (piece != null && piece.getColor().equals(board.getCurrentTurn())) {
+                            // Clicked on own piece: highlight its moves and set selection in parent
+                            highlightValidMoves(piece);
+                            parent.setSelectedFrom(position);
+                        } else {
+                            // Clicked on empty square or opponent's piece: clear highlights and clear selection
+                            clearHighlights();
+                            parent.clearSelectedFrom();
+                        }
+                    } else {
+                        clearHighlights();
+                        parent.clearSelectedFrom();
                     }
                 }
             }
