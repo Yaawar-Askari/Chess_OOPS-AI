@@ -152,6 +152,10 @@ public class ChessGUI extends JFrame {
         getContentPane().removeAll();
         boardPanel = new ChessBoardPanel(board, this);
         statusPanel = new GameStatusPanel("AI");
+        // Attach hint button action listener so the hint feature works in AI mode
+        if (statusPanel.getHintButton() != null) {
+            statusPanel.getHintButton().addActionListener(e -> requestHint());
+        }
         
         setLayout(new BorderLayout());
         add(boardPanel, BorderLayout.CENTER);
